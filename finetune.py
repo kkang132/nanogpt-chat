@@ -146,19 +146,41 @@ def finetune():
     # Optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
+    # Cosine learning rate scheduler with warmup
+    warmup_iters = 100
+    lr_decay_iters = max_iters
+    min_lr = learning_rate / 10  # Min LR is 10% of max
+
+    def get_lr(it):
+        # Linear warmup for warmup_iters steps
+        if it < warmup_iters:
+            return learning_rate * it / warmup_iters
+        # Cosine decay down to min learning rate after warmup
+        if it > lr_decay_iters:
+            return min_lr
+        decay_ratio = (it - warmup_iters) / (lr_decay_iters - warmup_iters)
+        coeff = 0.5 * (1.0 + np.cos(np.pi * decay_ratio))  # coeff ranges 0..1
+        return min_lr + coeff * (learning_rate - min_lr)
+
     print(f"\nStarting fine-tuning...")
     print(f"Batch size: {batch_size}")
     print(f"Block size: {block_size}")
     print(f"Max iterations: {max_iters}")
-    print(f"Learning rate: {learning_rate}")
+    print(f"Learning rate: {learning_rate} (with cosine decay to {min_lr})")
+    print(f"Warmup iterations: {warmup_iters}")
     print()
 
     # Training loop
     for iter in range(max_iters):
+        # Update learning rate
+        lr = get_lr(iter)
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
+
         # Evaluate periodically
         if iter % eval_interval == 0:
             losses = estimate_loss(model, train_data, val_data)
-            print(f"Step {iter}/{max_iters}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+            print(f"Step {iter}/{max_iters}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, lr {lr:.6f}")
 
         # Show progress every 10 steps
         elif iter % 10 == 0:
