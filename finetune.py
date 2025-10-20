@@ -22,12 +22,16 @@ MODEL_DIR = 'models'
 # Training hyperparameters
 batch_size = 2
 block_size = 128  # Reduced to handle smaller datasets
-max_iters = 500  # Reduced iterations for small dataset
+max_iters = 1000  # Increased from 500
 eval_interval = 50
 learning_rate = 3e-4
 device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
 eval_iters = 10  # Reduced for small dataset
 dropout = 0.1
+
+# Early stopping parameters
+patience = 5  # Stop if val loss doesn't improve for this many eval intervals
+min_delta = 0.001  # Minimum change in val loss to count as improvement
 
 print(f"Using device: {device}")
 
@@ -168,7 +172,13 @@ def finetune():
     print(f"Max iterations: {max_iters}")
     print(f"Learning rate: {learning_rate} (with cosine decay to {min_lr})")
     print(f"Warmup iterations: {warmup_iters}")
+    print(f"Early stopping: patience={patience}, min_delta={min_delta}")
     print()
+
+    # Early stopping tracking
+    best_val_loss = float('inf')
+    patience_counter = 0
+    early_stopped = False
 
     # Training loop
     for iter in range(max_iters):
@@ -180,7 +190,23 @@ def finetune():
         # Evaluate periodically
         if iter % eval_interval == 0:
             losses = estimate_loss(model, train_data, val_data)
-            print(f"Step {iter}/{max_iters}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, lr {lr:.6f}")
+            val_loss = losses['val'].item()
+            print(f"Step {iter}/{max_iters}: train loss {losses['train']:.4f}, val loss {val_loss:.4f}, lr {lr:.6f}")
+
+            # Early stopping check
+            if val_loss < best_val_loss - min_delta:
+                best_val_loss = val_loss
+                patience_counter = 0
+                print(f"  → New best val loss: {best_val_loss:.4f}")
+            else:
+                patience_counter += 1
+                print(f"  → No improvement ({patience_counter}/{patience})")
+
+                if patience_counter >= patience:
+                    print(f"\nEarly stopping triggered at iteration {iter}")
+                    print(f"Best validation loss: {best_val_loss:.4f}")
+                    early_stopped = True
+                    break
 
         # Show progress every 10 steps
         elif iter % 10 == 0:
@@ -196,8 +222,11 @@ def finetune():
         optimizer.step()
 
     # Final evaluation
-    losses = estimate_loss(model, train_data, val_data)
-    print(f"\nFinal: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+    if not early_stopped:
+        losses = estimate_loss(model, train_data, val_data)
+        print(f"\nFinal: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+    else:
+        print(f"\nTraining stopped early. Best val loss: {best_val_loss:.4f}")
 
     # Save the fine-tuned model
     os.makedirs(MODEL_DIR, exist_ok=True)
