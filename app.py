@@ -105,10 +105,12 @@ def generate_response(prompt, max_tokens=100, temperature=0.8, top_k=200):
 
 @app.route('/')
 def index():
+    """Render the chat UI (templates/index.html)."""
     return render_template('index.html')
 
 @app.route('/chat', methods=['POST'])
 def chat():
+    """Chat endpoint. Expects JSON {"message": str}. Returns model response and chat count."""
     data = request.json
     user_message = data.get('message', '')
 
