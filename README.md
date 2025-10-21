@@ -82,3 +82,24 @@ Edit `finetune.py` for training:
 - tiktoken
 
 All dependencies are already installed in the virtual environment.
+
+## Credits & Attribution
+
+### Core Dependencies
+- **[nanoGPT](https://github.com/karpathy/nanoGPT)** by [Andrej Karpathy](https://karpathy.ai/) - The foundation GPT implementation used in this project
+- **[GPT-2](https://openai.com/research/better-language-models)** by OpenAI - The base language model
+- **[transformers](https://huggingface.co/transformers/)** by Hugging Face - Model loading and tokenization
+
+### Inspiration
+This project builds upon Karpathy's excellent nanoGPT implementation, which provides a clean, educational, and efficient way to work with GPT models. The nanoGPT codebase prioritizes "teeth over education" and serves as the foundation for our chat system.
+
+### License
+This project follows the same MIT license as nanoGPT. See the [nanoGPT LICENSE](nanoGPT/LICENSE) for details.
+
+## Acknowledgments
+
+Special thanks to:
+- **Andrej Karpathy** for creating nanoGPT and making GPT training accessible
+- **OpenAI** for the GPT-2 model and research
+- **Hugging Face** for the transformers library and model ecosystem
+- The broader open-source ML community for tools and inspiration
