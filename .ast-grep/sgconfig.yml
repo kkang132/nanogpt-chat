@@ -1,6 +1,0 @@
-ruleDirs:
-  - rules
-
-languageGlobs:
-  python:
-    - "*.py"
