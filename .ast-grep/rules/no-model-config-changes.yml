@@ -1,0 +1,8 @@
+id: no-model-config-changes
+language: python
+rule:
+  pattern: |
+    GPTConfig($$$)
+message: "Cannot modify GPT model configuration - this is a protected pattern"
+severity: error
+note: "Model architecture configuration is locked to prevent breaking changes"

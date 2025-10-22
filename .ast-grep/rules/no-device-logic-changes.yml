@@ -1,0 +1,8 @@
+id: no-device-logic-changes
+language: python
+rule:
+  pattern: |
+    device = $$$
+message: "Cannot modify device selection logic - this is a protected pattern"
+severity: error
+note: "Device assignment is locked to prevent compatibility issues"
