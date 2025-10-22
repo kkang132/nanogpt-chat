@@ -1,6 +1,6 @@
 # NanoGPT Chat & Fine-tuning System
 
-A web-based chat interface for interacting with GPT-2, with automatic data collection for fine-tuning on your conversations.
+Karpathy's web-based chat interface for interacting with GPT-2, with automatic data collection for fine-tuning on your conversations. I used this clone for personal, educational purposes. I will, with multiple agents, extend NanoGPT with RL with the appropriate agent safeguards in place.
 
 ## Features
 
@@ -47,7 +47,7 @@ This will:
 
 Update `app.py` to load your fine-tuned checkpoint instead of the base GPT-2 model.
 
-## Code Protection (ast-grep)
+## A1. Code Protection (ast-grep)
 
 This project uses ast-grep to protect critical code patterns from unintended modifications by AI agents or developers.
 
