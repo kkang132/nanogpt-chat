@@ -1,6 +1,6 @@
 # NanoGPT Chat & Fine-tuning System
 
-Karpathy's web-based chat interface for interacting with GPT-2, with automatic data collection for fine-tuning on your conversations. I used this clone for personal, educational purposes. I will, with multiple agents, extend NanoGPT with RL with the appropriate agent safeguards in place.
+A clone of Karpathy's web-based chat interface for interacting with GPT-2, with automatic data collection for fine-tuning on your conversations. I use this clone for personal, educational purposes. I will, with multiple agents, extend NanoGPT with RL, with the appropriate agent safeguards in place.
 
 ## Features
 
