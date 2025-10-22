@@ -10,9 +10,11 @@ from .reward_model import (
     LearnedRewardModel, create_reward_model
 )
 from .environment import ChatEnvironment
+from .ppo import PPOConfig, RolloutBuffer, PPOAgent
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = [
     "RewardModel", "SimpleRatingReward", "MultiCriteriaReward", 
-    "LearnedRewardModel", "create_reward_model", "ChatEnvironment"
+    "LearnedRewardModel", "create_reward_model", "ChatEnvironment",
+    "PPOConfig", "RolloutBuffer", "PPOAgent"
 ]
