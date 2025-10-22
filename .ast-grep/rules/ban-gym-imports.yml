@@ -1,0 +1,10 @@
+id: ban-gym-imports
+language: python
+rule:
+  any:
+    - pattern: import gym
+    - pattern: from gym import $$$
+    - pattern: import gym as $$$
+message: "Cannot import deprecated 'gym' library - use 'gymnasium' instead"
+severity: error
+note: "The gym library is deprecated. Use 'import gymnasium' or 'from gymnasium import ...' instead"

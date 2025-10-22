@@ -57,6 +57,9 @@ The following patterns are locked and cannot be modified:
 - **GPT model configuration** (`GPTConfig`)
 - **Device selection logic** (`device = ...`)
 - **Model checkpoint loading** (`torch.load()`)
+- **Deprecated gym imports** (use `gymnasium` instead)
+- **Public API functions/classes** (in `__init__.py`, `api.py`, `app.py`)
+- **Function signatures** (parameters, defaults, and names - warnings only)
 
 ### Setup (One-time)
 

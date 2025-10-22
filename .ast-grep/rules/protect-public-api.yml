@@ -1,0 +1,24 @@
+id: protect-public-api
+language: python
+rule:
+  any:
+    # Protect top-level function definitions
+    - pattern: |
+        def $FUNC($$$):
+          $$$
+    # Protect top-level class definitions
+    - pattern: |
+        class $CLASS($$$):
+          $$$
+constraints:
+  FUNC:
+    regex: "^[a-zA-Z_]"
+  CLASS:
+    regex: "^[a-zA-Z_]"
+files:
+  - "__init__.py"
+  - "api.py"
+  - "app.py"
+message: "Cannot modify public API functions or classes in core files"
+severity: error
+note: "Top-level functions and classes in __init__.py, api.py, and app.py are part of the public API and require human review"
