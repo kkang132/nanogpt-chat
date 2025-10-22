@@ -4,9 +4,9 @@ A web-based chat interface for interacting with GPT-2, with automatic data colle
 
 ## Features
 
-- 🤖 Chat with GPT-2 through a beautiful web interface
+- 🤖 Chat with GPT-2 through a web interface
 - 💾 Automatic conversation logging for fine-tuning
-- 🎯 Easy fine-tuning pipeline on your chat data
+- 🎯 Fine-tuning pipeline on your chat data
 - 📊 Real-time statistics on collected conversations
 
 ## Quick Start
