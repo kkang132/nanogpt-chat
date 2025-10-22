@@ -16,8 +16,3 @@ __all__ = [
     "RewardModel", "SimpleRatingReward", "MultiCriteriaReward", 
     "LearnedRewardModel", "create_reward_model", "ChatEnvironment"
 ]
-from .reward_model import RewardModel
-from .environment import ChatEnvironment
-
-__version__ = "0.1.0"
-__all__ = ["RewardModel", "ChatEnvironment"]
