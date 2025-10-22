@@ -1,0 +1,8 @@
+id: no-model-loading-changes
+language: python
+rule:
+  pattern: |
+    torch.load($$$)
+message: "Cannot modify model loading logic - this is a protected pattern"
+severity: error
+note: "Model checkpoint loading is locked to prevent corruption"
