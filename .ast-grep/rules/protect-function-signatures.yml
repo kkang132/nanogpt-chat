@@ -1,0 +1,14 @@
+id: protect-function-signatures
+language: python
+rule:
+  pattern: |
+    def $FUNC($$$):
+      $$$
+message: "Function signature modification detected - verify parameters and defaults are unchanged"
+severity: warning
+note: |
+  This rule flags all function definitions for review. Ensure you haven't:
+  - Renamed the function
+  - Added or removed parameters
+  - Changed default argument values
+  Only edits inside the function body are permitted without review.
