@@ -91,7 +91,7 @@ All dependencies are already installed in the virtual environment.
 - **[transformers](https://huggingface.co/transformers/)** by Hugging Face - Model loading and tokenization
 
 ### Inspiration
-This project builds upon Karpathy's excellent nanoGPT implementation, which provides a clean, educational, and efficient way to work with GPT models. The nanoGPT codebase prioritizes "teeth over education" and serves as the foundation for our chat system.
+This project builds upon Karpathy's nanoGPT implementation. This is primarily for educational purposes.
 
 ### License
 This project follows the same MIT license as nanoGPT. See the [nanoGPT LICENSE](nanoGPT/LICENSE) for details.
