@@ -14,7 +14,7 @@ A web-based chat interface for interacting with GPT-2, with automatic data colle
 ### 1. Activate the virtual environment
 
 ```bash
-cd /Users/kris/IdeaProjects/nanogpt-chat
+cd /Users/.../nanogpt-chat
 source venv/bin/activate
 ```
 
