@@ -4,6 +4,8 @@ import torch
 import json
 import os
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
+import logging
 from nanoGPT.model import GPT, GPTConfig
 
 app = Flask(__name__)
@@ -12,7 +14,14 @@ CORS(app)
 # Configuration
 CHAT_LOG_FILE = 'chat_history.jsonl'
 MODEL_DIR = 'models'
+LOG_DIR = 'logs'
 os.makedirs(MODEL_DIR, exist_ok=True)
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Configure rotating file handler for chat logs
+# Max 10MB per file, keep 5 backup files (total ~50MB max)
+MAX_CHAT_LOG_BYTES = 10 * 1024 * 1024  # 10MB
+BACKUP_COUNT = 5
 
 # Initialize with a small GPT model
 device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
@@ -56,12 +65,29 @@ import tiktoken
 enc = tiktoken.get_encoding("gpt2")
 
 def save_chat(user_message, assistant_response):
-    """Save chat interaction to JSONL file for future fine-tuning"""
+    """Save chat interaction to JSONL file with rotation for future fine-tuning"""
     chat_entry = {
         'timestamp': datetime.now().isoformat(),
         'user': user_message,
         'assistant': assistant_response
     }
+
+    # Check file size and rotate if needed
+    if os.path.exists(CHAT_LOG_FILE):
+        file_size = os.path.getsize(CHAT_LOG_FILE)
+        if file_size >= MAX_CHAT_LOG_BYTES:
+            # Rotate: move current to .1, shift others up, delete oldest
+            for i in range(BACKUP_COUNT - 1, 0, -1):
+                old_file = f"{CHAT_LOG_FILE}.{i}"
+                new_file = f"{CHAT_LOG_FILE}.{i + 1}"
+                if os.path.exists(old_file):
+                    if i == BACKUP_COUNT - 1:
+                        os.remove(old_file)  # Remove oldest
+                    else:
+                        os.rename(old_file, new_file)
+            # Move current to .1
+            os.rename(CHAT_LOG_FILE, f"{CHAT_LOG_FILE}.1")
+
     with open(CHAT_LOG_FILE, 'a') as f:
         f.write(json.dumps(chat_entry) + '\n')
 
