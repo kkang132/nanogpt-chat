@@ -111,11 +111,33 @@ def index():
 @app.route('/chat', methods=['POST'])
 def chat():
     """Chat endpoint. Expects JSON {"message": str}. Returns model response and chat count."""
+    # Validate request content type
+    if not request.is_json:
+        return jsonify({'error': 'Content-Type must be application/json'}), 400
+
     data = request.json
+
+    # Validate data is a dictionary
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid JSON structure'}), 400
+
     user_message = data.get('message', '')
 
+    # Validate message exists and is a string
     if not user_message:
         return jsonify({'error': 'No message provided'}), 400
+
+    if not isinstance(user_message, str):
+        return jsonify({'error': 'Message must be a string'}), 400
+
+    # Validate message length (prevent DoS and excessive token usage)
+    if len(user_message) > 1000:
+        return jsonify({'error': 'Message too long (max 1000 characters)'}), 400
+
+    # Strip and validate non-empty after stripping
+    user_message = user_message.strip()
+    if not user_message:
+        return jsonify({'error': 'Message cannot be empty or whitespace only'}), 400
 
     # Generate response
     prompt = f"Human: {user_message}\nAssistant:"
