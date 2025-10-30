@@ -1,5 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import torch
 import json
 import os
@@ -10,6 +12,16 @@ from nanoGPT.model import GPT, GPTConfig
 
 app = Flask(__name__)
 CORS(app)
+
+# Configure rate limiting to prevent abuse
+# 20 requests per minute per IP for chat endpoint
+# 100 requests per minute for other endpoints
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["100 per minute"],
+    storage_uri="memory://"
+)
 
 # Configuration
 CHAT_LOG_FILE = 'chat_history.jsonl'
@@ -135,6 +147,7 @@ def index():
     return render_template('index.html')
 
 @app.route('/chat', methods=['POST'])
+@limiter.limit("20 per minute")
 def chat():
     """Chat endpoint. Expects JSON {"message": str}. Returns model response and chat count."""
     # Validate request content type
