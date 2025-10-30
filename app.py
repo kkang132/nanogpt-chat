@@ -48,7 +48,7 @@ if os.path.exists(finetuned_path):
     import sys
     sys.modules['model'] = sys.modules['nanoGPT.model']
 
-    checkpoint = torch.load(finetuned_path, map_location=device, weights_only=False)
+    checkpoint = torch.load(finetuned_path, map_location=device, weights_only=True)
     config = checkpoint['config']
     model = GPT(config)
     model.load_state_dict(checkpoint['model_state_dict'])
