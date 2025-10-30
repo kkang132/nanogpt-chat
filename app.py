@@ -208,7 +208,10 @@ if __name__ == '__main__':
     print(f"{'='*60}")
     print(f"Device: {device}")
     print(f"Chat logs: {CHAT_LOG_FILE}")
-    print(f"Access the app at: http://localhost:5000")
+    print(f"Access the app at: http://127.0.0.1:5000")
     print(f"{'='*60}\n")
 
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Security: disable debug mode and bind to localhost only in production
+    # debug=True enables interactive debugger with arbitrary code execution
+    # host='0.0.0.0' exposes the service to external networks
+    app.run(debug=False, host='127.0.0.1', port=5000)
