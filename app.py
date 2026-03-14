@@ -5,13 +5,14 @@ from flask_limiter.util import get_remote_address
 import torch
 import json
 import os
+import uuid
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 import logging
 from nanoGPT.model import GPT, GPTConfig
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["http://127.0.0.1:5000", "http://localhost:5000"])
 
 # Configure rate limiting to prevent abuse
 # 20 requests per minute per IP for chat endpoint
@@ -23,10 +24,11 @@ limiter = Limiter(
     storage_uri="memory://"
 )
 
-# Configuration
-CHAT_LOG_FILE = 'chat_history.jsonl'
-MODEL_DIR = 'models'
-LOG_DIR = 'logs'
+# Configuration — use absolute paths anchored to the app directory
+_APP_DIR = os.path.abspath(os.path.dirname(__file__))
+CHAT_LOG_FILE = os.path.join(_APP_DIR, 'chat_history.jsonl')
+MODEL_DIR = os.path.join(_APP_DIR, 'models')
+LOG_DIR = os.path.join(_APP_DIR, 'logs')
 os.makedirs(MODEL_DIR, exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
 
@@ -40,19 +42,31 @@ device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is
 print(f"Using device: {device}")
 
 # Load fine-tuned model (or fall back to base model)
-finetuned_path = os.path.join(MODEL_DIR, 'finetuned_20251020_100757.pt')
+# Auto-detect the latest checkpoint by timestamp in filename
+# Checks both supervised (finetuned_*) and RL (ppo_*) checkpoints
+import glob
+finetuned_checkpoints = sorted(
+    glob.glob(os.path.join(MODEL_DIR, 'finetuned_*.pt'))
+    + glob.glob(os.path.join(MODEL_DIR, 'ppo_*.pt'))
+)
+finetuned_path = finetuned_checkpoints[-1] if finetuned_checkpoints else None
 
-if os.path.exists(finetuned_path):
+if finetuned_path and os.path.exists(finetuned_path):
     print("Loading fine-tuned model...")
     # Need to add nanoGPT.model to sys.modules for unpickling
     import sys
     sys.modules['model'] = sys.modules['nanoGPT.model']
 
+    # Checkpoint was saved with GPTConfig under 'model' module path;
+    # patch __module__ so weights_only=True can safely resolve model.GPTConfig
+    GPTConfig.__module__ = 'model'
+    sys.modules['model'] = sys.modules['nanoGPT.model']
+    torch.serialization.add_safe_globals([GPTConfig])
     checkpoint = torch.load(finetuned_path, map_location=device, weights_only=True)
     config = checkpoint['config']
     model = GPT(config)
     model.load_state_dict(checkpoint['model_state_dict'])
-    print(f"Fine-tuned model loaded (train loss: {checkpoint['train_loss']:.4f})")
+    print(f"Fine-tuned model loaded from {os.path.basename(finetuned_path)} (train loss: {checkpoint['train_loss']:.4f})")
 else:
     print("Loading base GPT-2 model...")
     nano_model_path = os.path.join(MODEL_DIR, 'gpt2_nano.pt')
@@ -77,11 +91,17 @@ import tiktoken
 enc = tiktoken.get_encoding("gpt2")
 
 def save_chat(user_message, assistant_response):
-    """Save chat interaction to JSONL file with rotation for future fine-tuning"""
+    """Save chat interaction to JSONL file with rotation for future fine-tuning.
+
+    Returns the chat entry ID so callers can reference it (e.g. for rating).
+    """
+    chat_id = str(uuid.uuid4())
     chat_entry = {
+        'id': chat_id,
         'timestamp': datetime.now().isoformat(),
         'user': user_message,
-        'assistant': assistant_response
+        'assistant': assistant_response,
+        'rating': None,
     }
 
     # Check file size and rotate if needed
@@ -103,7 +123,9 @@ def save_chat(user_message, assistant_response):
     with open(CHAT_LOG_FILE, 'a') as f:
         f.write(json.dumps(chat_entry) + '\n')
 
-def generate_response(prompt, max_tokens=100, temperature=0.8, top_k=200):
+    return chat_id
+
+def generate_response(prompt, max_tokens=150, temperature=0.8, top_k=200):
     """Generate response using the model"""
     model.eval()
 
@@ -140,6 +162,20 @@ def generate_response(prompt, max_tokens=100, temperature=0.8, top_k=200):
     # Extract only the generated part (after the prompt)
     response = generated_text[len(prompt):].strip()
     return response if response else "I'm thinking..."
+
+@app.after_request
+def set_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Content-Security-Policy'] = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    return response
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Catch-all error handler to prevent leaking internal details."""
+    app.logger.error(f"Unhandled exception: {e}")
+    return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/')
 def index():
@@ -182,12 +218,22 @@ def chat():
     prompt = f"Human: {user_message}\nAssistant:"
     response = generate_response(prompt, max_tokens=150, temperature=0.8)
 
-    # Save the interaction
-    save_chat(user_message, response)
+    # Save the interaction (non-critical — don't fail the response on write errors)
+    chat_id = None
+    try:
+        chat_id = save_chat(user_message, response)
+    except OSError:
+        app.logger.warning("Failed to save chat interaction to log file")
+
+    chat_count = 0
+    if os.path.exists(CHAT_LOG_FILE):
+        with open(CHAT_LOG_FILE) as f:
+            chat_count = sum(1 for _ in f)
 
     return jsonify({
         'response': response,
-        'chat_count': sum(1 for _ in open(CHAT_LOG_FILE)) if os.path.exists(CHAT_LOG_FILE) else 0
+        'chat_count': chat_count,
+        'chat_id': chat_id,
     })
 
 @app.route('/stats', methods=['GET'])
@@ -196,11 +242,56 @@ def stats():
     if not os.path.exists(CHAT_LOG_FILE):
         return jsonify({'chat_count': 0})
 
-    chat_count = sum(1 for _ in open(CHAT_LOG_FILE))
+    with open(CHAT_LOG_FILE) as f:
+        chat_count = sum(1 for _ in f)
     return jsonify({
         'chat_count': chat_count,
         'ready_for_finetuning': chat_count >= 10
     })
+
+@app.route('/rate', methods=['POST'])
+@limiter.limit("30 per minute")
+def rate():
+    """Rate a chat response. Expects {"chat_id": str, "rating": 0 or 1}."""
+    if not request.is_json:
+        return jsonify({'error': 'Content-Type must be application/json'}), 400
+
+    data = request.json
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Invalid JSON structure'}), 400
+
+    chat_id = data.get('chat_id')
+    rating = data.get('rating')
+
+    if not chat_id or not isinstance(chat_id, str):
+        return jsonify({'error': 'chat_id is required'}), 400
+    if rating not in (0, 1):
+        return jsonify({'error': 'rating must be 0 or 1'}), 400
+
+    if not os.path.exists(CHAT_LOG_FILE):
+        return jsonify({'error': 'No chat history found'}), 404
+
+    lines = []
+    found = False
+    with open(CHAT_LOG_FILE, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            entry = json.loads(line)
+            if entry.get('id') == chat_id:
+                entry['rating'] = rating
+                found = True
+            lines.append(json.dumps(entry))
+
+    if not found:
+        return jsonify({'error': 'Chat ID not found'}), 404
+
+    with open(CHAT_LOG_FILE, 'w') as f:
+        f.write('\n'.join(lines) + '\n')
+
+    return jsonify({'status': 'ok', 'chat_id': chat_id, 'rating': rating})
+
 
 if __name__ == '__main__':
     print(f"\n{'='*60}")
