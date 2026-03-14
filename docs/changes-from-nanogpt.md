@@ -1,6 +1,6 @@
 # Changes from Karpathy's nanoGPT
 
-This project began as a clone of [nanoGPT](https://github.com/karpathy/nanoGPT). What follows are the material differences. Not every modification is listed — the small ones accumulate in the usual way.
+This project began as a clone of [nanoGPT](https://github.com/karpathy/nanoGPT). The GPT-2 model implementation (`model.py`) has been vendored into the project root and the nanoGPT git submodule removed, since nanoGPT has been deprecated in favor of [nanochat](https://github.com/karpathy/nanochat). What follows are the material differences. Not every modification is listed — the small ones accumulate in the usual way.
 
 ## Chat interface
 

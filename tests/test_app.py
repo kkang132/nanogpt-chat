@@ -61,14 +61,14 @@ def app(tmp_path, monkeypatch):
     sys.modules.pop("app", None)
 
     # Patch GPT constructor and tiktoken before importing app
-    import nanoGPT.model as nanoGPT_model
-    original_gpt_init = nanoGPT_model.GPT.__init__
+    import model as gpt_model
+    original_gpt_init = gpt_model.GPT.__init__
 
-    with patch.object(nanoGPT_model.GPT, "__init__", lambda self, config: None), \
-         patch.object(nanoGPT_model.GPT, "load_state_dict", lambda self, sd: None), \
-         patch.object(nanoGPT_model.GPT, "eval", lambda self: None), \
-         patch.object(nanoGPT_model.GPT, "to", lambda self, dev: self), \
-         patch.object(nanoGPT_model.GPT, "parameters", lambda self: [torch.zeros(1)]), \
+    with patch.object(gpt_model.GPT, "__init__", lambda self, config: None), \
+         patch.object(gpt_model.GPT, "load_state_dict", lambda self, sd: None), \
+         patch.object(gpt_model.GPT, "eval", lambda self: None), \
+         patch.object(gpt_model.GPT, "to", lambda self, dev: self), \
+         patch.object(gpt_model.GPT, "parameters", lambda self: [torch.zeros(1)]), \
          patch("tiktoken.get_encoding", return_value=mock_enc), \
          patch("glob.glob", return_value=[]):               # no finetuned checkpoints
 

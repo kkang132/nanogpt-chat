@@ -1,5 +1,5 @@
 """
-Fine-tuning script for nanoGPT on collected chat data
+Fine-tuning script for GPT-2 on collected chat data
 Run this after collecting sufficient chat interactions
 """
 from __future__ import annotations
@@ -11,8 +11,6 @@ import torch
 import numpy as np
 from datetime import datetime
 
-# Add nanoGPT to path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'nanoGPT'))
 from model import GPT, GPTConfig
 import tiktoken
 
