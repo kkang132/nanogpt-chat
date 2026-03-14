@@ -114,8 +114,8 @@ class TestGetBatch:
         """Returned x, y have shape (batch_size, block_size)."""
         data = self._make_data()
         x, y = finetune.get_batch("train", data, data)
-        assert x.shape == (finetune.batch_size, finetune.block_size)
-        assert y.shape == (finetune.batch_size, finetune.block_size)
+        assert x.shape == (finetune.BATCH_SIZE, finetune.BLOCK_SIZE)
+        assert y.shape == (finetune.BATCH_SIZE, finetune.BLOCK_SIZE)
 
     def test_y_is_shifted_x(self):
         """y should be x shifted by one position (next-token prediction)."""
@@ -201,8 +201,8 @@ class TestEarlyStopping:
 
     def test_stops_after_patience_exhausted(self):
         """Simulates val losses that don't improve — should trigger stop."""
-        patience = finetune.patience
-        min_delta = finetune.min_delta
+        patience = finetune.PATIENCE
+        min_delta = finetune.MIN_DELTA
 
         best_val_loss = 1.0
         patience_counter = 0
@@ -226,8 +226,8 @@ class TestEarlyStopping:
 
     def test_resets_on_improvement(self):
         """Patience counter resets when val loss improves."""
-        patience = finetune.patience
-        min_delta = finetune.min_delta
+        patience = finetune.PATIENCE
+        min_delta = finetune.MIN_DELTA
 
         best_val_loss = 1.0
         patience_counter = 0

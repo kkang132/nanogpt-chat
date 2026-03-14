@@ -5,32 +5,36 @@ This module implements the ChatEnvironment class, which serves as the RL
 environment interface for PPO training. It defines the state and action spaces
 and integrates with the reward model.
 """
+from __future__ import annotations
 
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
-from typing import Optional, Tuple, Any
+from typing import Any, Optional, Tuple
+
+from rl.reward_model import RewardModel
+
 
 # Define a mock model and tokenizer for standalone testing
 class MockModel:
-    def __init__(self, vocab_size):
+    def __init__(self, vocab_size: int) -> None:
         self.vocab_size = vocab_size
 
-    def __call__(self, inputs):
+    def __call__(self, inputs: np.ndarray) -> np.ndarray:
         # Simulate model outputting random token probabilities
         batch_size, sequence_length = inputs.shape
         return np.random.rand(batch_size, sequence_length, self.vocab_size)
 
 class MockTokenizer:
-    def __init__(self, vocab_size, pad_token_id=0):
+    def __init__(self, vocab_size: int, pad_token_id: int = 0) -> None:
         self.vocab_size = vocab_size
         self.pad_token_id = pad_token_id
 
-    def encode(self, text):
+    def encode(self, text: str) -> list[int]:
         # Simulate tokenization
         return [ord(c) for c in text]
 
-    def decode(self, token_ids):
+    def decode(self, token_ids: list[int]) -> str:
         # Simulate decoding
         return "".join([chr(t) for t in token_ids if t != self.pad_token_id])
 
@@ -43,7 +47,7 @@ class ChatEnvironment(gym.Env):
     """
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, model, tokenizer, reward_model, max_length=512):
+    def __init__(self, model: Any, tokenizer: Any, reward_model: RewardModel, max_length: int = 512) -> None:
         """
         Initialize the ChatEnvironment.
 
