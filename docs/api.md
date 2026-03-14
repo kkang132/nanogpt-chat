@@ -65,7 +65,7 @@ Rate limit: 30 requests/minute per IP.
 | Input validation | JSON required, string type, 1000 char limit, no whitespace-only |
 | Binding | `127.0.0.1` — not reachable from external networks |
 | Debug | Disabled |
-| Headers | `X-Frame-Options: DENY`, `CSP: default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` |
+| Headers | `X-Frame-Options: DENY`, `CSP: default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` |
 | Error handling | Catch-all returns generic 500, logs internally |
 
 ## Production

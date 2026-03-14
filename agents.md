@@ -47,6 +47,10 @@ Agents often work in worktree checkouts, not the main clone.
 - **Merge target**: Worktree branches merge to `main`. Run `git log main..HEAD` to see what's diverged.
 - **Cleanup**: After merging, run `git worktree remove <path>` and `git worktree prune`.
 
+## Git Config
+
+Do not modify `.git/config` without explicit user approval. This includes adding, changing, or removing remotes, user identity, credential helpers, or any other settings. Ask first.
+
 ## Context Recovery
 
 Read `docs/rl-roadmap.md`. Check `git log`. The supervised system is the fallback — it must always work.

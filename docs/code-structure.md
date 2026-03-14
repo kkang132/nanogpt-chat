@@ -7,12 +7,17 @@ nanogpt-chat/
 ├── app.py                    # Flask server, inference, logging
 ├── finetune.py               # Fine-tuning pipeline
 ├── download_dataset.py       # Dataset bootstrapper
+├── agents.md                 # Agent instructions (canonical)
+├── CLAUDE.md                 # Delegates to agents.md
 ├── requirements.txt          # Dependencies
 ├── sgconfig.yml              # ast-grep config
 ├── nanoGPT/                  # GPT-2 implementation
 │   └── model.py
 ├── templates/
 │   └── index.html            # Chat UI
+├── static/
+│   ├── css/styles.css        # Extracted styles
+│   └── js/app.js             # Extracted client JS
 ├── rl/
 │   ├── __init__.py
 │   ├── environment.py        # Gymnasium ChatEnvironment
@@ -37,7 +42,7 @@ nanogpt-chat/
 
 ### app.py
 
-Flask application. Routes: `GET /`, `POST /chat`, `POST /rate`, `GET /stats`. Loads model at import time — tries latest `finetuned_*.pt`, falls back to `gpt2_nano.pt`. Generation uses tiktoken, temperature sampling, top-k. Conversations appended to `chat_history.jsonl` with rotation. Security details in [api.md](api.md).
+Flask application. Routes: `GET /`, `POST /chat`, `POST /rate`, `GET /stats`. Loads model at import time — tries latest `finetuned_*.pt` or `ppo_*.pt`, falls back to `gpt2_nano.pt`. Generation uses tiktoken, temperature sampling, top-k. Conversations appended to `chat_history.jsonl` with rotation. Security details in [api.md](api.md).
 
 ### finetune.py
 
