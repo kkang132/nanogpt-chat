@@ -1,123 +1,51 @@
-# Architecture Overview
+# Architecture
 
-## System Design
+## Overview
 
-NanoGPT Chat is a Flask-based web application that provides a conversational interface to a GPT-2 language model with fine-tuning capabilities. The system collects user conversations, uses them to fine-tune the model, and serves an improved chat experience.
+A Flask server wraps GPT-2 inference, logs conversations, and feeds them back through a fine-tuning pipeline. An RL layer is partially built on top.
 
-## High-Level Components
+## Components
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      Web Browser                        │
-│                   (templates/index.html)                │
-└────────────────────┬────────────────────────────────────┘
-                     │ HTTP/REST
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│                   Flask Web Server                      │
-│                      (app.py)                           │
-│  ┌─────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │   Routes    │  │  Generation  │  │   Logging    │  │
-│  │  /chat      │→ │   Pipeline   │→ │chat_history  │  │
-│  │  /stats     │  │              │  │    .jsonl    │  │
-│  └─────────────┘  └──────────────┘  └──────────────┘  │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│                 GPT-2 Model Layer                       │
-│                  (nanoGPT/model.py)                     │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │  Transformer Architecture                        │  │
-│  │  • 12 layers, 12 heads, 768 embedding dim        │  │
-│  │  • Causal self-attention with Flash Attention   │  │
-│  │  • Layer normalization & dropout                │  │
-│  └──────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│              Fine-tuning Pipeline                       │
-│                   (finetune.py)                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌─────────────┐  │
-│  │ Data Prep    │→ │  Training    │→ │   Export    │  │
-│  │  JSONL→bin   │  │  AdamW+LR    │  │  Checkpoint │  │
-│  │              │  │  Scheduler   │  │             │  │
-│  └──────────────┘  └──────────────┘  └─────────────┘  │
-└─────────────────────────────────────────────────────────┘
+Browser (index.html)
+  │ HTTP
+  ▼
+Flask (app.py) ─── rate limiting, CORS, security headers
+  │
+  ▼
+GPT-2 (nanoGPT/model.py) ─── 124M params, see docs/model.md
+  │
+  ├──→ chat_history.jsonl ──→ finetune.py ──→ models/finetuned_*.pt
+  │                                              ↑ auto-loaded on restart
+  └──→ download_dataset.py ──→ chat_history.jsonl (bootstrap)
+
+RL layer (partial):
+  rl/environment.py    ChatEnvironment (Gymnasium)    ✓ implemented
+  rl/reward_model.py   3 reward model variants        ✓ implemented
+  rl/ppo_trainer.py    PPO training loop              ✓ implemented
 ```
 
 ## Data Flow
 
-### 1. Chat Interaction Flow
-```
-User Input → Flask /chat endpoint → Tokenization (tiktoken)
-           → Model Generation (with temperature/top-k sampling)
-           → Response → Save to JSONL → Return to User
-```
+**Chat**: user message → `POST /chat` → tokenize → generate (max_tokens=150, temperature=0.8, top_k=200) → log to JSONL → return response.
 
-### 2. Fine-tuning Flow
-```
-chat_history.jsonl → Data Preparation (tokenization)
-                   → Train/Val Split (90/10)
-                   → Training Loop (AdamW + Cosine LR)
-                   → Early Stopping
-                   → Save Checkpoint
-                   → Load in app.py for inference
-```
+**Fine-tuning**: JSONL → tokenize → 90/10 split → AdamW + cosine LR + early stopping → save checkpoint.
 
-## Key Design Decisions
+**Dataset bootstrap**: OpenAssistant oasst1 (1500 conversation pairs) + GSM8K (500 math examples) → JSONL format.
 
-### Device Selection
-The application automatically selects the best available compute device:
-1. CUDA GPU (if available)
-2. Apple Silicon MPS (if available)
-3. CPU (fallback)
+## Key Decisions
 
-### Model Loading Strategy
-- **Base Model**: Loads `models/gpt2_nano.pt` (standard GPT-2 small)
-- **Fine-tuned Model**: Automatically detects and loads `models/finetuned_*.pt` if present
-- Module shim (`sys.modules['model']`) handles unpickling compatibility
-
-### Generation Strategy
-- **Tokenization**: Uses tiktoken GPT-2 encoder
-- **Sampling**: Top-k sampling with temperature control
-- **Context Window**: 1024 tokens (block_size)
-- **Stopping**: Generates until newline or max_tokens reached
-
-### Training Strategy
-- **Optimizer**: AdamW with learning rate 3e-4
-- **LR Schedule**: Linear warmup (100 iters) + Cosine decay
-- **Early Stopping**: Patience of 5 eval intervals, min delta 0.001
-- **Regularization**: Dropout 0.1 during training
+- **Device cascade**: CUDA → MPS → CPU, auto-detected once at startup.
+- **Safe loading**: `weights_only=True` on all `torch.load()` calls.
+- **Checkpoint auto-detection**: latest `finetuned_*.pt` or `ppo_*.pt` by filename sort.
+- **Log rotation**: 10MB per file, 5 backups. Prevents disk exhaustion.
+- **Localhost only**: `127.0.0.1:5000`. Not exposed to the network.
 
 ## Storage
 
-### Chat History (`chat_history.jsonl`)
-JSON Lines format storing all conversations:
-```json
-{"timestamp": "2025-10-21T10:30:00", "user": "Hello", "assistant": "Hi there!"}
-```
-
-### Model Checkpoints (`models/`)
-- `gpt2_nano.pt`: Base pretrained model (state dict only)
-- `finetuned_YYYYMMDD_HHMMSS.pt`: Fine-tuned checkpoints (full checkpoint with config and loss metrics)
-
-### Training Data (`data/`)
-- `train.bin`: Training tokens (uint16 binary)
-- `val.bin`: Validation tokens (uint16 binary)
-
-## Scalability Considerations
-
-### Current Limitations
-- Single-threaded Flask server (development mode)
-- In-memory model loading (no model server)
-- Local file-based storage
-- No authentication or user management
-
-### Production Considerations
-- Use production WSGI server (gunicorn, uwsgi)
-- Implement request queuing for concurrent inference
-- Add caching layer for common queries
-- Implement conversation history per user
-- Add rate limiting and API authentication
+| Path | Format | Notes |
+|------|--------|-------|
+| `chat_history.jsonl` | `{"timestamp", "user", "assistant"}` per line (live chat); `{"user", "assistant"}` (bootstrap) | rotated at 10MB |
+| `models/gpt2_nano.pt` | state_dict | base weights |
+| `models/finetuned_*.pt` | `{model_state_dict, config, iter, train_loss, val_loss}` | timestamped |
+| `data/{train,val}.bin` | uint16 token IDs | generated by finetune.py |

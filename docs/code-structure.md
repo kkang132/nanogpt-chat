@@ -1,246 +1,87 @@
 # Code Structure
 
-## Project Layout
+## Layout
 
 ```
 nanogpt-chat/
-├── app.py                    # Flask web server and chat endpoints
-├── finetune.py              # Model fine-tuning script
-├── chat_history.jsonl       # Collected conversations (generated)
-├── README.md                # Project documentation
-├── .gitignore              # Git ignore rules
-│
-├── nanoGPT/                # GPT model implementation
-│   └── model.py            # Transformer architecture
-│
-├── templates/              # Flask HTML templates
-│   └── index.html          # Chat web interface
-│
-├── models/                 # Model checkpoints (gitignored)
-│   ├── gpt2_nano.pt       # Base pretrained model
-│   └── finetuned_*.pt     # Fine-tuned checkpoints
-│
-├── data/                   # Training data (generated, gitignored)
-│   ├── train.bin          # Training tokens
-│   └── val.bin            # Validation tokens
-│
-├── venv/                   # Python virtual environment
-│
-└── docs/                   # Documentation
-    ├── architecture.md
-    ├── code-structure.md
-    ├── model.md
-    └── api.md
+├── app.py                    # Flask server, inference, logging
+├── finetune.py               # Fine-tuning pipeline
+├── download_dataset.py       # Dataset bootstrapper
+├── requirements.txt          # Dependencies
+├── sgconfig.yml              # ast-grep config
+├── nanoGPT/                  # GPT-2 implementation
+│   └── model.py
+├── templates/
+│   └── index.html            # Chat UI
+├── rl/
+│   ├── __init__.py
+│   ├── environment.py        # Gymnasium ChatEnvironment
+│   ├── reward_model.py       # Reward scoring models
+│   └── ppo_trainer.py        # PPO training with value head
+├── tests/
+│   ├── test_app.py
+│   ├── test_download_dataset.py
+│   ├── test_environment.py
+│   ├── test_finetune.py
+│   ├── test_ppo_trainer.py
+│   └── test_reward_model.py
+├── models/                   # Checkpoints (gitignored)
+├── data/                     # Token binaries (gitignored)
+├── .ast-grep/rules/          # 6 protection rules
+├── pyproject.toml            # Ruff linter/formatter config
+├── .pre-commit-config.yaml   # Pre-commit hooks (Ruff)
+└── docs/
 ```
 
-## Module Descriptions
+## Modules
 
-### `app.py` - Web Server & Inference
+### app.py
 
-**Purpose**: Main Flask application serving chat interface and handling model inference.
+Flask application. Routes: `GET /`, `POST /chat`, `POST /rate`, `GET /stats`. Loads model at import time — tries latest `finetuned_*.pt`, falls back to `gpt2_nano.pt`. Generation uses tiktoken, temperature sampling, top-k. Conversations appended to `chat_history.jsonl` with rotation. Security details in [api.md](api.md).
 
-**Key Components**:
+### finetune.py
 
-#### Configuration (lines 12-20)
-- `CHAT_LOG_FILE`: Path to conversation history
-- `MODEL_DIR`: Directory for model checkpoints
-- Device selection (CUDA → MPS → CPU)
+Reads `chat_history.jsonl`. Formats as `"Human: ...\nAssistant: ...\n\n"`. Tokenizes, splits 90/10, saves as `data/{train,val}.bin`. Trains with AdamW, cosine LR schedule (warmup 100 iters, decay to 3e-5), early stopping (patience 5). Saves to `models/finetuned_YYYYMMDD_HHMMSS.pt`.
 
-#### Model Loading (lines 21-53)
-- Attempts to load fine-tuned model first
-- Falls back to base GPT-2 if not found
-- Applies unpickling shim for checkpoint compatibility
-- Moves model to selected device and sets to eval mode
+### download_dataset.py
 
-#### Core Functions
-- `save_chat(user_message, assistant_response)` (lines 58-66)
-  - Appends conversation to JSONL file
-  - Includes ISO timestamp
+Downloads OpenAssistant oasst1 (conversation, 1500 examples) and GSM8K (math, 500 examples) via Hugging Face `datasets`. Filters OpenAssistant for English top-level prompts with the highest-ranked assistant reply. Cleans, combines, shuffles, writes to `chat_history.jsonl`. Licenses: CC-BY-4.0 (OpenAssistant), MIT (GSM8K).
 
-- `generate_response(prompt, max_tokens, temperature, top_k)` (lines 68-104)
-  - Tokenizes input with tiktoken
-  - Runs autoregressive generation
-  - Applies temperature scaling and top-k sampling
-  - Stops at newline or max tokens
-  - Returns decoded text
+### nanoGPT/model.py
 
-#### Flask Routes
-- `GET /` (lines 106-109): Serves chat UI
-- `POST /chat` (lines 111-130): Handles chat messages
-  - Formats prompt as "Human: ... Assistant:"
-  - Generates response
-  - Saves interaction
-  - Returns response + chat count
-- `GET /stats` (lines 132-142): Returns chat statistics
-  - Total conversation count
-  - Ready-for-finetuning flag (≥10 chats)
+GPT-2 small. Details in [model.md](model.md). Classes: `LayerNorm`, `CausalSelfAttention`, `MLP`, `Block`, `GPTConfig`, `GPT`.
 
-### `finetune.py` - Model Training
+### rl/environment.py
 
-**Purpose**: Fine-tunes GPT-2 on collected chat data.
+`ChatEnvironment(gymnasium.Env)`. State: token history (Box, 512). Action: next token (Discrete). Includes `MockModel` and `MockTokenizer` for testing.
 
-**Key Components**:
+### rl/reward_model.py
 
-#### Configuration (lines 17-35)
-- Training hyperparameters (batch size, learning rate, iterations)
-- Device selection
-- Early stopping parameters (patience, min_delta)
+ABC `RewardModel` with `score_response()` and `update_from_feedback()`. Implementations: `SimpleRatingReward` (binary feedback), `MultiCriteriaReward` (weighted: relevance, helpfulness, safety, coherence), `LearnedRewardModel` (placeholder). Factory: `create_reward_model()`.
 
-#### Data Pipeline
-- `prepare_training_data()` (lines 38-86)
-  - Loads JSONL conversations
-  - Formats as "Human: ... Assistant: ..." strings
-  - Tokenizes with tiktoken
-  - Splits 90/10 train/val
-  - Saves as uint16 binary files
-  - Returns file paths and token counts
+### rl/ppo_trainer.py
 
-- `get_batch(split, train_data, val_data)` (lines 88-99)
-  - Randomly samples batch_size sequences
-  - Each sequence is block_size tokens
-  - Creates input (x) and target (y) tensors
-  - Moves to device
+PPO (Proximal Policy Optimization) training loop. Uses the GPT model's logits as the policy, adds a lightweight `ValueHead` for advantage estimation, and keeps a frozen reference model for KL penalty. Classes: `PPOConfig`, `ValueHead`, `PPOTrainer`. Saves checkpoints to `models/ppo_*.pt`.
 
-#### Training Infrastructure
-- `estimate_loss(model, train_data, val_data)` (lines 101-114)
-  - Evaluates on train and validation sets
-  - Averages loss over eval_iters batches
-  - Temporarily sets model to eval mode
+### templates/index.html
 
-- `get_lr(it)` (lines 158-167)
-  - Learning rate schedule function
-  - Linear warmup for first 100 iterations
-  - Cosine decay to min_lr (10% of max)
-
-#### Training Loop (lines 116-249)
-- Loads base GPT-2 checkpoint
-- Creates AdamW optimizer
-- Iterates up to max_iters:
-  - Updates learning rate
-  - Evaluates every eval_interval steps
-  - Checks early stopping criteria
-  - Performs backward pass and optimization
-- Saves final checkpoint with metadata
-
-### `nanoGPT/model.py` - Transformer Architecture
-
-**Purpose**: Complete GPT-2 implementation in PyTorch.
-
-**Key Classes**:
-
-#### `LayerNorm` (lines 18-27)
-- Custom layer normalization with optional bias
-- Used throughout transformer blocks
-
-#### `CausalSelfAttention` (lines 29-76)
-- Multi-head causal self-attention
-- Supports Flash Attention (PyTorch ≥2.0)
-- Falls back to manual attention implementation
-- Projects to Q, K, V and computes scaled dot-product attention
-
-#### `MLP` (lines 78-92)
-- Feed-forward network
-- Linear → GELU → Linear → Dropout
-- 4x hidden dimension expansion
-
-#### `Block` (lines 94+)
-- Transformer block combining:
-  - Layer norm → Attention → Residual
-  - Layer norm → MLP → Residual
-
-#### `GPTConfig` (dataclass)
-- Configuration for model architecture
-- Parameters: vocab_size, n_layer, n_head, n_embd, block_size, dropout, bias
-
-#### `GPT` (main model class)
-- Token and position embeddings
-- Stack of transformer blocks
-- Final layer norm and language model head
-- Forward pass with optional targets for training
-- Generation method for inference
-
-### `templates/index.html` - Chat Interface
-
-**Purpose**: Single-page web UI for chat interactions.
-
-**Structure**:
-- **CSS** (lines 7-164): Modern, gradient-styled chat interface
-- **HTML** (lines 166-198): Chat container, message area, input box
-- **JavaScript** (lines 200-268):
-  - `addMessage()`: Appends messages to chat
-  - `sendMessage()`: Sends POST to `/chat` endpoint
-  - Event listeners for send button and Enter key
-  - Loads initial stats on page load
-
-**Features**:
-- Responsive design
-- Loading animation during generation
-- Automatic scroll to latest message
-- Displays conversation count
+Single-page chat UI. Vanilla JS. Posts to `/chat`, displays messages, fetches `/stats` on load.
 
 ## Data Formats
 
-### `chat_history.jsonl`
-JSON Lines format (one JSON object per line):
+**JSONL** (`chat_history.jsonl`):
 ```json
-{"timestamp": "2025-10-21T16:30:00.123456", "user": "What is AI?", "assistant": "AI is..."}
+{"id": "uuid", "timestamp": "...", "user": "...", "assistant": "...", "rating": null}  // from app.py (live chat)
+{"user": "...", "assistant": "..."}                                                     // from download_dataset.py (bootstrap)
 ```
 
-### Model Checkpoints
+`rating`: `null` = unrated, `1` = thumbs up, `0` = thumbs down. Negatively-rated entries are excluded during fine-tuning.
 
-**Base model** (`gpt2_nano.pt`):
-```python
-torch.load() → state_dict (OrderedDict)
-```
+**Base checkpoint** (`gpt2_nano.pt`): bare `state_dict`.
 
 **Fine-tuned checkpoint** (`finetuned_*.pt`):
 ```python
-{
-    'model_state_dict': OrderedDict,  # Model weights
-    'config': GPTConfig,              # Architecture config
-    'iter': int,                      # Training iterations
-    'train_loss': float,              # Final train loss
-    'val_loss': float                 # Final validation loss
-}
+{"model_state_dict": ..., "config": GPTConfig, "iter": int, "train_loss": float, "val_loss": float}
 ```
 
-### Training Data (`train.bin`, `val.bin`)
-Raw binary files of uint16 token IDs, memory-mapped for efficient loading.
-
-## Dependencies
-
-**Core**:
-- `torch`: PyTorch for model and training
-- `flask`: Web framework
-- `flask-cors`: CORS support
-- `tiktoken`: GPT-2 tokenizer
-- `numpy`: Array operations
-
-**Standard Library**:
-- `json`: JSONL parsing
-- `os`: File operations
-- `datetime`: Timestamps
-- `math`, `inspect`, `dataclasses`: Utilities
-
-## Entry Points
-
-### Development Server
-```bash
-python app.py
-# Starts Flask on http://0.0.0.0:5000
-```
-
-### Fine-tuning
-```bash
-python finetune.py
-# Trains on chat_history.jsonl
-# Saves checkpoint to models/
-```
-
-## Configuration
-
-Most configuration is hardcoded in the respective files:
-- `app.py`: Model path, generation parameters (temp, top_k, max_tokens)
-- `finetune.py`: Training hyperparameters, early stopping settings
-
-To modify behavior, edit the configuration sections at the top of each file.
+**Token binaries** (`train.bin`, `val.bin`): raw uint16 arrays, memory-mapped.
