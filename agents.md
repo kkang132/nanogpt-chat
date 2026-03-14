@@ -51,6 +51,8 @@ Agents often work in worktree checkouts, not the main clone.
 
 Do not modify `.git/config` without explicit user approval. This includes adding, changing, or removing remotes, user identity, credential helpers, or any other settings. Ask first.
 
+Do not run `gh auth login`, `gh auth switch`, or any command that changes the authenticated GitHub identity. The authenticated user is `kkang132`. Verify with `gh auth status` if uncertain.
+
 ## Context Recovery
 
 Read `docs/rl-roadmap.md`. Check `git log`. The supervised system is the fallback — it must always work.
