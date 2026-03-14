@@ -53,6 +53,10 @@ Do not modify `.git/config` without explicit user approval. This includes adding
 
 Do not run `gh auth login`, `gh auth switch`, or any command that changes the authenticated GitHub identity. The authenticated user is `kkang132`. Verify with `gh auth status` if uncertain.
 
+## Tool Reliability
+
+Never use Bash subagents to read file contents — they can hallucinate output. Use the Read tool directly for any file where accuracy matters (especially `.git/config`, credentials, configuration). Reserve Bash for commands that *do* things, not commands that *read* things.
+
 ## Context Recovery
 
 Read `docs/rl-roadmap.md`. Check `git log`. The supervised system is the fallback — it must always work.

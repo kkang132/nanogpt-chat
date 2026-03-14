@@ -11,8 +11,7 @@ nanogpt-chat/
 ├── CLAUDE.md                 # Delegates to agents.md
 ├── requirements.txt          # Dependencies
 ├── sgconfig.yml              # ast-grep config
-├── nanoGPT/                  # GPT-2 implementation
-│   └── model.py
+├── model.py                  # GPT-2 implementation (vendored from nanoGPT)
 ├── templates/
 │   └── index.html            # Chat UI
 ├── static/
@@ -52,9 +51,9 @@ Reads `chat_history.jsonl`. Formats as `"Human: ...\nAssistant: ...\n\n"`. Token
 
 Downloads OpenAssistant oasst1 (conversation, 1500 examples) and GSM8K (math, 500 examples) via Hugging Face `datasets`. Filters OpenAssistant for English top-level prompts with the highest-ranked assistant reply. Cleans, combines, shuffles, writes to `chat_history.jsonl`. Licenses: CC-BY-4.0 (OpenAssistant), MIT (GSM8K).
 
-### nanoGPT/model.py
+### model.py
 
-GPT-2 small. Details in [model.md](model.md). Classes: `LayerNorm`, `CausalSelfAttention`, `MLP`, `Block`, `GPTConfig`, `GPT`.
+GPT-2 small, vendored from Karpathy's [nanoGPT](https://github.com/karpathy/nanoGPT). Details in [model.md](model.md). Classes: `LayerNorm`, `CausalSelfAttention`, `MLP`, `Block`, `GPTConfig`, `GPT`.
 
 ### rl/environment.py
 

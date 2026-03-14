@@ -13,7 +13,7 @@ Browser (index.html)
 Flask (app.py) ─── rate limiting, CORS, security headers
   │
   ▼
-GPT-2 (nanoGPT/model.py) ─── 124M params, see docs/model.md
+GPT-2 (model.py) ─── 124M params, see docs/model.md
   │
   ├──→ chat_history.jsonl ──→ finetune.py ──→ models/finetuned_*.pt
   │                                              ↑ auto-loaded on restart

@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 import logging
-from nanoGPT.model import GPT, GPTConfig
+from model import GPT, GPTConfig
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -86,14 +86,7 @@ finetuned_path = finetuned_checkpoints[-1] if finetuned_checkpoints else None
 
 if finetuned_path and os.path.exists(finetuned_path):
     print("Loading fine-tuned model...")
-    # Need to add nanoGPT.model to sys.modules for unpickling
-    import sys
-    sys.modules['model'] = sys.modules['nanoGPT.model']
-
-    # Checkpoint was saved with GPTConfig under 'model' module path;
-    # patch __module__ so weights_only=True can safely resolve model.GPTConfig
-    GPTConfig.__module__ = 'model'
-    sys.modules['model'] = sys.modules['nanoGPT.model']
+    # Ensure weights_only=True can safely resolve model.GPTConfig
     torch.serialization.add_safe_globals([GPTConfig])
     checkpoint = torch.load(finetuned_path, map_location=device, weights_only=True)
     config = checkpoint['config']

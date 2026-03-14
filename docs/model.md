@@ -2,7 +2,7 @@
 
 ## Architecture
 
-GPT-2 small, implemented in `nanoGPT/model.py`.
+GPT-2 small, implemented in `model.py` (vendored from Karpathy's [nanoGPT](https://github.com/karpathy/nanoGPT)).
 
 | Parameter | Value |
 |-----------|-------|
@@ -38,7 +38,7 @@ All `torch.load()` calls use `weights_only=True`.
 
 **Base model**: `models/gpt2_nano.pt` — bare state_dict, loaded into a fresh `GPT(GPTConfig(...))`.
 
-**Fine-tuned model**: `models/finetuned_*.pt` — contains `model_state_dict`, `config`, loss metrics. Requires a module shim (`sys.modules['model'] = sys.modules['nanoGPT.model']`) and `torch.serialization.add_safe_globals([GPTConfig])` for safe deserialization.
+**Fine-tuned model**: `models/finetuned_*.pt` — contains `model_state_dict`, `config`, loss metrics. Requires `torch.serialization.add_safe_globals([GPTConfig])` for safe deserialization.
 
 The server auto-loads the latest fine-tuned checkpoint by filename sort. Falls back to base if none exist.
 

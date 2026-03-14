@@ -14,10 +14,8 @@ import sys
 import numpy as np
 import pytest
 
-# finetune.py adds 'nanoGPT' to sys.path and uses `from model import …`.
-# Make sure the import works from the test runner's cwd.
+# Add project root to path so `from model import …` works from the test runner's cwd.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "nanoGPT"))
 
 import finetune
 

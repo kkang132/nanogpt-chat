@@ -13,9 +13,8 @@ import unittest
 
 import torch
 
-# Add project root and nanoGPT to path
+# Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "nanoGPT"))
 
 from model import GPT, GPTConfig
 from rl.ppo_trainer import PPOConfig, PPOTrainer, ValueHead
