@@ -37,6 +37,16 @@ One logical change per commit. No "and" in commit messages — split instead.
 Commit dependencies before dependents. Repo must build at every commit.
 Run `ruff check . && ruff format .` per commit, not as a separate lint commit.
 
+## Git Worktrees
+
+Agents often work in worktree checkouts, not the main clone.
+
+- **Branch naming**: Keep the branch name the tool generates (e.g. `air/dependency-management-…`). Don't rename it.
+- **Path-aware commands**: Use paths relative to the worktree root or anchored to `__file__`. Never assume you're in the main checkout. `os.getcwd()` is fragile; `Path(__file__).parent` is correct.
+- **No shared venvs**: Each worktree needs its own virtual environment. A venv from the main clone has baked-in paths that break in a worktree.
+- **Merge target**: Worktree branches merge to `main`. Run `git log main..HEAD` to see what's diverged.
+- **Cleanup**: After merging, run `git worktree remove <path>` and `git worktree prune`.
+
 ## Context Recovery
 
 Read `docs/rl-roadmap.md`. Check `git log`. The supervised system is the fallback — it must always work.
