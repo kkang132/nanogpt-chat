@@ -11,6 +11,9 @@ data/
 models/*.pt
 models/*.bin
 
+# Eval output
+eval/
+
 # Keep model config
 !models/config.json
 

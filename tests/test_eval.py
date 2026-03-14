@@ -31,8 +31,9 @@ def _patch_eval_paths(tmp_path, monkeypatch):
     """Redirect eval globals to temp directory."""
     monkeypatch.setattr(eval_module, "MODEL_DIR", str(tmp_path / "models"))
     monkeypatch.setattr(eval_module, "DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setattr(eval_module, "EVAL_DIR", tmp_path / "eval")
     monkeypatch.setattr(
-        eval_module, "RESULTS_FILE", str(tmp_path / "eval_results.jsonl")
+        eval_module, "RESULTS_FILE", str(tmp_path / "eval" / "eval_results.jsonl")
     )
 
 

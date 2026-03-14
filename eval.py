@@ -38,7 +38,8 @@ from model import GPT, GPTConfig
 _SCRIPT_DIR = Path(__file__).resolve().parent
 MODEL_DIR = _SCRIPT_DIR / "models"
 DATA_DIR = _SCRIPT_DIR / "data"
-RESULTS_FILE = _SCRIPT_DIR / "eval_results.jsonl"
+EVAL_DIR = _SCRIPT_DIR / "eval"
+RESULTS_FILE = EVAL_DIR / "eval_results.jsonl"
 
 # Eval hyperparameters
 EVAL_BATCH_SIZE = 2
@@ -548,6 +549,7 @@ def format_results_table(results: list[dict[str, object]]) -> str:
 
 def save_results(results: list[dict[str, object]], path: str) -> None:
     """Append each result as a JSON line to *path*."""
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     with Path(path).open("a") as f:
         for r in results:
             # Strip sample_responses for cleaner logs
@@ -597,7 +599,7 @@ def main() -> None:
     parser.add_argument(
         "--output",
         default=RESULTS_FILE,
-        help="JSONL output file (default: eval_results.jsonl)",
+        help="JSONL output file (default: eval/eval_results.jsonl)",
     )
     args = parser.parse_args()
 
