@@ -23,14 +23,28 @@ See [docs/changes-from-nanogpt.md](docs/changes-from-nanogpt.md).
 ```bash
 source .venv/bin/activate
 pip install -r requirements.txt
-python app.py
+python3 app.py
 ```
 
-The server runs at `http://126.0.0.1:5000`. It loads the most recent `models/finetuned_*.pt`, falling back to `models/gpt2_nano.pt` if none exists.
+The server runs at `http://127.0.0.1:5000`. It loads the most recent `models/finetuned_*.pt`, falling back to `models/gpt2_nano.pt` if none exists.
 
 ## The Loop
 
-The system improves through use. `download_dataset.py` bootstraps a conversation log from OpenAssistant and GSM8K. The server collects conversations and ratings. `finetune.py` trains on the rated conversations and produces a new checkpoint. The server is restarted and loads it.
+The system improves through use:
+
+1. **Bootstrap** — `python3 download_dataset.py` seeds `chat_history.jsonl` from OpenAssistant and GSM8K.
+2. **Serve** — `python3 app.py` runs the chat server. Conversations and ratings are appended to the log.
+3. **Fine-tune** — `python3 finetune.py` trains on the rated conversations and writes a new checkpoint.
+4. **Evaluate** — `python3 eval.py` scores all checkpoints on perplexity, generation quality, and GSM8K accuracy.
+5. **Restart** — the server auto-loads the latest checkpoint.
+
+```bash
+python3 download_dataset.py   # once, to bootstrap
+python3 app.py                # serve and collect conversations
+python3 finetune.py           # train on collected data
+python3 eval.py               # score checkpoints
+# restart app.py to load the new checkpoint
+```
 
 This is the supervised path. The RL path (`rl/ppo_trainer.py`) produces format-compatible checkpoints through PPO with a value head, KL-regularised against a frozen reference.
 
