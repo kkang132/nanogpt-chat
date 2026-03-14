@@ -1,0 +1,21 @@
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors (PEP 8)
+    "W",    # pycodestyle warnings (PEP 8)
+    "F",    # pyflakes
+    "I",    # isort (import ordering)
+    "N",    # pep8-naming
+    "UP",   # pyupgrade (modern Python idioms)
+    "SIM",  # flake8-simplify (pythonic patterns)
+    "PIE",  # flake8-pie (misc pythonic)
+    "RET",  # flake8-return
+    "C4",   # flake8-comprehensions (idiomatic)
+    "PTH",  # flake8-use-pathlib (idiomatic)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]

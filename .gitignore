@@ -17,8 +17,12 @@ models/*.bin
 # IDE
 .idea/
 .vscode/
+.air/
 *.swp
 *.swo
+
+# Virtual environments
+.venv/
 
 # OS
 .DS_Store
