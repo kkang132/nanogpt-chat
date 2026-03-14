@@ -10,14 +10,15 @@ import numpy as np
 from datetime import datetime
 
 # Add nanoGPT to path
-sys.path.append('nanoGPT')
+sys.path.append(os.path.join(os.path.dirname(__file__), 'nanoGPT'))
 from model import GPT, GPTConfig
 import tiktoken
 
-# Configuration
-CHAT_LOG_FILE = 'chat_history.jsonl'
-DATA_DIR = 'data'
-MODEL_DIR = 'models'
+# Configuration — use absolute paths anchored to the script directory
+_SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__))
+CHAT_LOG_FILE = os.path.join(_SCRIPT_DIR, 'chat_history.jsonl')
+DATA_DIR = os.path.join(_SCRIPT_DIR, 'data')
+MODEL_DIR = os.path.join(_SCRIPT_DIR, 'models')
 
 # Training hyperparameters
 batch_size = 2
@@ -41,14 +42,22 @@ def prepare_training_data():
         print(f"Error: {CHAT_LOG_FILE} not found. Collect some chats first!")
         return None
 
-    # Read all chat interactions
+    # Read all chat interactions, filtering out negatively-rated responses
     conversations = []
+    skipped_negative = 0
     with open(CHAT_LOG_FILE, 'r') as f:
         for line in f:
             chat = json.loads(line)
+            # Skip negatively-rated responses; keep unrated (None) and positive (1)
+            if chat.get('rating') == 0:
+                skipped_negative += 1
+                continue
             # Format as conversational training data
             text = f"Human: {chat['user']}\nAssistant: {chat['assistant']}\n\n"
             conversations.append(text)
+
+    if skipped_negative > 0:
+        print(f"Filtered out {skipped_negative} negatively-rated conversations")
 
     if len(conversations) < 10:
         print(f"Warning: Only {len(conversations)} conversations found. Recommend collecting at least 50 for meaningful fine-tuning.")
@@ -144,7 +153,7 @@ def finetune():
         bias=True
     )
     model = GPT(config)
-    model.load_state_dict(torch.load(nano_model_path, map_location=device))
+    model.load_state_dict(torch.load(nano_model_path, map_location=device, weights_only=True))
     model.to(device)
 
     # Optimizer
