@@ -2,7 +2,7 @@
 
 ## Situation
 
-The test suite contains 82 tests across six files. All 82 passed on 14 March 2026. The command to run them is:
+The test suite contains 126 tests across seven files. The command to run them is:
 
 ```bash
 pytest tests/
@@ -39,6 +39,12 @@ The fine-tuning script has a shape that resists easy testing. Its main function 
 The learning-rate schedule is a closure inside the training function and cannot be imported directly. Instead, the tests reproduce the schedule's formula and verify its boundary conditions: that it starts at zero, reaches the maximum at the end of warmup, decays monotonically through the cosine phase, reaches the minimum at the final decay iteration, and clamps beyond that point.
 
 The early-stopping logic is similarly embedded in the training loop. The tests simulate sequences of validation losses and confirm that stopping occurs at the correct iteration when losses plateau, and that the patience counter resets when a genuine improvement appears.
+
+### Evaluation pipeline (`tests/test_eval.py`, 44 tests)
+
+The evaluation pipeline scores checkpoints on perplexity, generation quality, and GSM8K math accuracy. The tests exercise the pure-logic helpers without loading real models or running GPU inference.
+
+Checkpoint discovery is tested for finding finetuned, PPO, and base model checkpoints, for sorting order (base model first), for empty directories, and for ignoring non-checkpoint files. The scoring functions — `score_length`, `score_repetition`, `score_coherence`, and `score_format` — are each tested at their boundary conditions: empty input, ideal input, penalized input, and edge cases. `extract_numeric_answer` is tested for "the answer is" patterns, `####` markers, comma-separated numbers, decimals, negatives, and fallback to the last number in the text. `compute_perplexity` is tested at zero loss, a known loss value, and high loss. `compute_val_loss` is tested for correct averaging and for raising on datasets too small to batch. `format_results_table` is tested for normal output, for dash placeholders on `None` values, and for truncation of long checkpoint names. `save_results` is tested for file creation, append behaviour, valid JSONL output, and stripping of sample responses.
 
 ### Dataset utilities (`tests/test_download_dataset.py`, 6 tests)
 
@@ -92,7 +98,7 @@ The chat log is a JSONL file written by `app.py` and read by `finetune.py`. If b
 
 ## Design Choices
 
-The suite is deliberately fast. Eighty-two tests in under two seconds means there is no practical barrier to running them before every commit. That speed comes from a decision to mock the expensive parts — model loading, GPU allocation, network calls — and test the logic that surrounds them. The trade-off is that the mocked boundaries are precisely the places where integration bugs are most likely to hide.
+The suite is deliberately fast. 126 tests in under two seconds means there is no practical barrier to running them before every commit. That speed comes from a decision to mock the expensive parts — model loading, GPU allocation, network calls — and test the logic that surrounds them. The trade-off is that the mocked boundaries are precisely the places where integration bugs are most likely to hide.
 
 The suite uses pytest throughout. `test_environment.py` and `test_ppo_trainer.py` use `unittest.TestCase`, which pytest runs without complaint, so there was no reason to rewrite them.
 

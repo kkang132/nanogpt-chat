@@ -31,11 +31,11 @@ The server detects the latest `models/finetuned_*.pt` on startup. No configurati
 
 ## RL components
 
-`rl/environment.py` and `rl/reward_model.py` are the beginning of an RLHF extension. Nothing like this exists in the original. The PPO trainer and policy networks are not yet written.
+`rl/environment.py`, `rl/reward_model.py`, and `rl/ppo_trainer.py` form an RLHF extension. The environment wraps chat as a Gymnasium MDP, three reward model variants score responses, and the PPO trainer optimizes the language model's policy with a value head and KL regularisation against a frozen reference. Nothing like this exists in the original.
 
 ## Test suite
 
-Karpathy's nanoGPT has no tests. This project has 71, covering the Flask endpoints and their input validation, the fine-tuning data pipeline, the dataset cleaning utilities, the RL environment, and the reward models. The suite runs in 1.38 seconds with all heavy dependencies mocked out. A pre-commit hook runs the tests alongside the linter so that broken code cannot be committed without deliberate override. The full accounting of what is and is not tested is in `docs/testing.md`.
+Karpathy's nanoGPT has no tests. This project has 126 across seven files, covering the Flask endpoints and their input validation, the fine-tuning data pipeline, the evaluation pipeline, the dataset cleaning utilities, the RL environment, the PPO trainer, and the reward models. The suite runs in under two seconds with all heavy dependencies mocked out. A pre-commit hook runs the tests alongside the linter so that broken code cannot be committed without deliberate override. The full accounting of what is and is not tested is in `docs/testing.md`.
 
 ## Code protection
 

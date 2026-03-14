@@ -6,6 +6,7 @@
 nanogpt-chat/
 ├── app.py                    # Flask server, inference, logging
 ├── finetune.py               # Fine-tuning pipeline
+├── eval.py                   # Evaluation pipeline (perplexity, generation, GSM8K)
 ├── download_dataset.py       # Dataset bootstrapper
 ├── agents.md                 # Agent instructions (canonical)
 ├── CLAUDE.md                 # Delegates to agents.md
@@ -26,6 +27,7 @@ nanogpt-chat/
 │   ├── test_app.py
 │   ├── test_download_dataset.py
 │   ├── test_environment.py
+│   ├── test_eval.py
 │   ├── test_finetune.py
 │   ├── test_ppo_trainer.py
 │   └── test_reward_model.py
@@ -46,6 +48,10 @@ Flask application. Routes: `GET /`, `POST /chat`, `POST /rate`, `GET /stats`. Lo
 ### finetune.py
 
 Reads `chat_history.jsonl`. Formats as `"Human: ...\nAssistant: ...\n\n"`. Tokenizes, splits 90/10, saves as `data/{train,val}.bin`. Trains with AdamW, cosine LR schedule (warmup 100 iters, decay to 3e-5), early stopping (patience 5). Saves to `models/finetuned_YYYYMMDD_HHMMSS.pt`.
+
+### eval.py
+
+Evaluation pipeline. Discovers checkpoints in `models/`, then runs three suites: perplexity (validation loss on held-out data), generation quality (scoring length, repetition, coherence, and format of model responses), and GSM8K accuracy (math reasoning). Results are formatted as a table and appended to `eval/eval_results.jsonl`.
 
 ### download_dataset.py
 
