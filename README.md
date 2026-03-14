@@ -1,197 +1,153 @@
-# NanoGPT Chat & Fine-tuning System
+# NanoGPT Chat
 
-A clone of Karpathy's web-based chat interface for interacting with GPT-2, with automatic data collection for fine-tuning on your conversations. I use this clone for personal, educational purposes. I will, with multiple agents, extend NanoGPT with RL, with the appropriate agent safeguards in place.
+This repository is best thought of as a local chat system built on top of Karpathy's `nanoGPT`, together with a disciplined route for improving it. The supervised path already works: the server runs locally, conversations are logged, ratings can be attached to responses, and those logs can be used to fine-tune a new checkpoint. The reinforcement-learning (RL) work is available, but it is not yet the engine of the project. It is an extension under construction.
 
-## Features
+It is worth being explicit at the outset about what the project is not. It is not a hosted service, not a wrapper around a remote API, and not a production RLHF system. Its present center is a local GPT-2 checkpoint and a loop of chat, log, rate, fine-tune, and reload — with a PPO training path now available alongside the supervised one.
 
-- 🤖 Chat with GPT-2 through a web interface
-- 💾 Automatic conversation logging for fine-tuning
-- 🎯 Fine-tuning pipeline on your chat data
-- 📊 Real-time statistics on collected conversations
+## Running the System
 
-## Quick Start
-
-### 1. Activate the virtual environment
+The minimal path is straightforward:
 
 ```bash
-cd /Users/.../nanogpt-chat
 source venv/bin/activate
-```
-
-### 2. Start the chat server
-
-```bash
+pip install -r requirements.txt
 python app.py
 ```
 
-The server will start at `http://localhost:5000`
+This serves the application at `http://127.0.0.1:5000`. On startup, `app.py` looks for the most recent file matching `models/finetuned_*.pt`. If one exists, it is loaded. If none exists, the application falls back to the local base checkpoint `models/gpt2_nano.pt`.
 
-### 3. Chat with the model
-
-Open your browser and navigate to `http://localhost:5000`. Start chatting! All conversations are automatically saved to `chat_history.jsonl`.
-
-### 4. Fine-tune on your data
-
-After collecting enough conversations (recommend 50+), run:
+Two further commands are part of the normal working life of the repository:
 
 ```bash
+python download_dataset.py
 python finetune.py
 ```
 
-This will:
-- Prepare your chat data for training
-- Fine-tune GPT-2 on your conversations
-- Save the fine-tuned model in `models/`
+The first constructs an initial `chat_history.jsonl`. The second turns that file into token binaries and fine-tunes a new model checkpoint. The RL-oriented tests can be run with:
 
-### 5. Use your fine-tuned model
-
-Update `app.py` to load your fine-tuned checkpoint instead of the base GPT-2 model.
-
-## A1. Code Protection (ast-grep)
-
-This project uses ast-grep to protect critical code patterns from unintended modifications by AI agents or developers.
-
-### Protected Patterns
-
-The following patterns are locked and cannot be modified:
-- **GPT model configuration** (`GPTConfig`)
-- **Device selection logic** (`device = ...`)
-- **Model checkpoint loading** (`torch.load()`)
-- **Deprecated gym imports** (use `gymnasium` instead)
-- **Public API functions/classes** (in `__init__.py`, `api.py`, `app.py`)
-- **Function signatures** (parameters, defaults, and names - warnings only)
-
-### Setup (One-time)
-
-1. **Install ast-grep:**
-   ```bash
-   brew install ast-grep
-   ```
-
-2. **Set up the pre-commit hook:**
-   ```bash
-   # Copy the hook to your local .git/hooks directory
-   cat > .git/hooks/pre-commit << 'EOF'
-   #!/bin/bash
-
-   # Get list of staged Python files
-   STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$')
-
-   if [ -z "$STAGED_FILES" ]; then
-       # No Python files staged, allow commit
-       exit 0
-   fi
-
-   echo "🔍 Running ast-grep validation on changed lines in staged Python files..."
-
-   # For each staged file, check only the added/modified lines
-   HAS_VIOLATIONS=0
-
-   for file in $STAGED_FILES; do
-       # Get the staged version of the file
-       git show ":$file" > /tmp/staged_${file##*/}
-
-       # Run ast-grep on the staged version
-       if ! ast-grep scan /tmp/staged_${file##*/} 2>&1 | grep -q "error\["; then
-           continue
-       fi
-
-       # If we get here, there are violations
-       echo ""
-       echo "❌ Violations found in $file:"
-       ast-grep scan /tmp/staged_${file##*/}
-       HAS_VIOLATIONS=1
-
-       # Clean up temp file
-       rm /tmp/staged_${file##*/}
-   done
-
-   if [ $HAS_VIOLATIONS -eq 1 ]; then
-       echo ""
-       echo "❌ ast-grep validation failed!"
-       echo "Your changes violate protected code patterns."
-       echo "Please review the errors above and modify your changes."
-       echo ""
-       echo "To bypass this check (not recommended): git commit --no-verify"
-       exit 1
-   fi
-
-   echo "✅ ast-grep validation passed!"
-   exit 0
-   EOF
-
-   chmod +x .git/hooks/pre-commit
-   ```
-
-### How It Works
-
-When you commit changes to Python files, the pre-commit hook:
-1. Scans staged files for protected patterns
-2. Blocks the commit if violations are found
-3. Shows you which patterns were violated
-
-To bypass (use carefully):
 ```bash
-git commit --no-verify -m "your message"
+pytest tests/
 ```
 
-### Modifying Protection Rules
+## How the Datasets Are Constructed
 
-Rules are defined in `.ast-grep/rules/`. To add or modify protections, edit the YAML files in that directory.
+The script `download_dataset.py` constructs `chat_history.jsonl` from two specific Hugging Face datasets.
 
-## Project Structure
+| Source | Count | Method | Purpose |
+|------|------:|--------|---------|
+| `OpenAssistant/oasst1` | 1,500 | keep English top-level prompts and pair each with the highest-ranked English assistant reply | conversational behaviour |
+| `openai/gsm8k` | 500 | sample from the training split, remove calculator annotations, and normalise the final answer marker | mathematical reasoning |
 
-```
-nanogpt-chat/
-├── app.py                 # Flask web server
-├── finetune.py           # Fine-tuning script
-├── templates/
-│   └── index.html        # Web interface
-├── nanoGPT/              # Karpathy's nanoGPT (cloned)
-├── chat_history.jsonl    # Logged conversations
-├── data/                 # Prepared training data
-└── models/               # Fine-tuned model checkpoints
+The combined set is shuffled with a fixed seed and written in JSON Lines format. Bootstrap entries look like this:
+
+```json
+{"user": "...", "assistant": "..."}
 ```
 
-## Configuration
+Live conversations collected by `app.py` are written to the same file in a slightly richer form:
 
-Edit the following parameters in `app.py` for generation:
-- `max_tokens`: Length of generated responses
-- `temperature`: Randomness (higher = more creative)
-- `top_k`: Top-k sampling parameter
+```json
+{"id": "...", "timestamp": "...", "user": "...", "assistant": "...", "rating": null}
+```
 
-Edit `finetune.py` for training:
-- `batch_size`: Batch size for training
-- `max_iters`: Number of training iterations
-- `learning_rate`: Learning rate for optimizer
+That common format is not an incidental convenience. It means that synthetic seed data and real interaction data feed the same supervised training pipeline.
 
-## Requirements
+## How Fine-Tuning Is Done
 
-- Python 3.8+
-- PyTorch
-- Flask
-- transformers
-- tiktoken
+`finetune.py` is intentionally specific. It does not try to be a universal training script. Instead, it takes the conversation log as it exists in this project and converts it into a form that the local GPT-2 model can use directly.
 
-All dependencies are already installed in the virtual environment.
+The process is as follows.
 
-## Credits & Attribution
+1. Read `chat_history.jsonl`.
+2. Discard negatively rated examples, that is, entries with `rating == 0`.
+3. Render each remaining exchange as:
 
-### Core Dependencies
-- **[nanoGPT](https://github.com/karpathy/nanoGPT)** by [Andrej Karpathy](https://karpathy.ai/) - The foundation GPT implementation used in this project
-- **[GPT-2](https://openai.com/research/better-language-models)** by OpenAI - The base language model
-- **[transformers](https://huggingface.co/transformers/)** by Hugging Face - Model loading and tokenization
+```text
+Human: ...
+Assistant: ...
+```
 
-### Inspiration
-This project builds upon Karpathy's nanoGPT implementation. This is primarily for educational purposes.
+4. Tokenise the concatenated text with the GPT-2 tokenizer from `tiktoken`.
+5. Split the token stream `90/10` into training and validation segments.
+6. Write `data/train.bin` and `data/val.bin` as `uint16` arrays.
+7. Load the local base checkpoint `models/gpt2_nano.pt`.
+8. Fine-tune with `AdamW`, a batch size of `2`, a block size of `128`, and a maximum of `1000` iterations.
+9. Use linear warmup for `100` steps, then cosine learning-rate decay.
+10. Evaluate every `50` iterations and stop early after `5` non-improving validation checks with `min_delta = 0.001`.
+11. Save the result as `models/finetuned_YYYYMMDD_HHMMSS.pt`.
 
-### License
-This project follows the same MIT license as nanoGPT. See the [nanoGPT LICENSE](nanoGPT/LICENSE) for details.
+The important point is that the fine-tuning starts from a local GPT-2 base, not from an external service. The base of the current training loop is `models/gpt2_nano.pt`, loaded through `nanoGPT.model.GPT`.
 
-## Acknowledgments
+## What the Training Loop Is, and Is Not
 
-Special thanks to:
-- **Andrej Karpathy** for creating nanoGPT and making GPT training accessible
-- **OpenAI** for the GPT-2 model and research
-- **Hugging Face** for the transformers library and model ecosystem
-- The broader open-source ML community for tools and inspiration
+There is already a usable training loop, but it is supervised rather than reinforcement-based. In practical terms, the present loop is:
+
+1. optionally bootstrap `chat_history.jsonl` with `python download_dataset.py`
+2. run `python app.py`
+3. collect conversations and ratings
+4. run `python finetune.py`
+5. restart the server so that it picks up the newest fine-tuned checkpoint
+
+This loop is simple, but that simplicity is not a defect. It gives the project a stable baseline and a way of improving behaviour without confusing aspiration with implementation.
+
+The repository also contains a PPO training path. `rl/environment.py`, `rl/reward_model.py`, and `rl/ppo_trainer.py` are all implemented and tested. The PPO trainer uses the GPT model directly as the policy — its logits define the action distribution — with a lightweight value head for advantage estimation. A frozen reference model provides a KL penalty to prevent the policy from drifting too far from the pretrained distribution. Checkpoints are saved in the same format as `finetune.py`, so the chat server can load them without modification. The supervised system remains the simpler and more reliable path; the PPO path is available for those who want to explore RL-based alignment.
+
+## Tests and Build Status
+
+The repository contains `82` tests under `tests/`, all passing as of 14 March 2026. The intended verification command is:
+
+```bash
+pytest tests/
+```
+
+The suite covers the Flask application endpoints and their input validation, the supervised fine-tuning pipeline, the dataset preparation utilities, the Gymnasium environment, the reward-model layer, and the PPO trainer. A full account of what is tested, what is not, and the reasoning behind those boundaries is in `docs/testing.md`.
+
+## Agent-First Work in JetBrains Air
+
+This repository is being worked on in an agent-first loop in JetBrains Air. That phrase can easily become vague, so it is better to make it concrete. The usual cycle is:
+
+1. inspect the current code and documentation
+2. recover context from `docs/rl-roadmap.md` and recent commits
+3. make a narrow change
+4. verify what can honestly be verified
+5. update the documentation so that it matches the codebase
+
+Multiple loops can be run in parallel. That way of working suits this project particularly well, because the project has a divided character. One part of it is settled enough to be used: the local chat application and supervised fine-tuning path. Another part is exploratory: the RL extension. An agent-first loop is useful precisely when one wants to improve the second without damaging the first.
+
+## Structure
+
+For the full layout, see `docs/code-structure.md`. The short map is below.
+
+| Path | Purpose |
+|------|---------|
+| `app.py` | Flask server, inference, logging, ratings |
+| `finetune.py` | supervised fine-tuning pipeline |
+| `download_dataset.py` | dataset bootstrapper |
+| `nanoGPT/model.py` | GPT-2 implementation from `nanoGPT` |
+| `rl/` | Gymnasium environment, reward models, PPO trainer |
+| `tests/` | test suite (endpoints, fine-tuning, datasets, RL) |
+| `templates/index.html` | local chat interface |
+| `.ast-grep/rules/` | code-protection rules |
+| `pyproject.toml` | Ruff configuration |
+| `.pre-commit-config.yaml` | pre-commit hooks |
+
+## Guardrails
+
+Critical patterns are protected with `ast-grep` rules under `.ast-grep/rules/`. In particular, the rules guard `GPTConfig` parameters, device selection, `torch.load()` calls, `gym` imports, and public API signatures. The pre-commit hook enforces those checks. If one wishes to bypass that safeguard, the bypass is explicit: `git commit --no-verify`.
+
+## Further Reading
+
+- `docs/changes-from-nanogpt.md`
+- `docs/architecture.md`
+- `docs/api.md`
+- `docs/model.md`
+- `docs/code-structure.md`
+- `docs/rl-roadmap.md`
+- `docs/testing.md`
+
+## Credits
+
+- `nanoGPT` by Andrej Karpathy
+- GPT-2 by OpenAI
+
+MIT license. See `nanoGPT/LICENSE`.
