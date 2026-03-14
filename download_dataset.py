@@ -4,10 +4,12 @@ Combines OpenAssistant (conversation) and GSM8K (math)
 into chat_history.jsonl format.
 """
 import json
+import os
 import random
 from datasets import load_dataset
 
-CHAT_LOG_FILE = 'chat_history.jsonl'
+_SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__))
+CHAT_LOG_FILE = os.path.join(_SCRIPT_DIR, 'chat_history.jsonl')
 OASST_COUNT = 1500
 MATH_COUNT = 500
 SEED = 42
