@@ -20,6 +20,7 @@ Pre-commit enforces this. Bypass: `git commit --no-verify`.
 |------|------|--------|
 | `app.py` | Flask server, `:5000`, rate-limited | stable |
 | `finetune.py` | Supervised training on `chat_history.jsonl` | stable |
+| `eval.py` | Evaluation pipeline: perplexity, generation quality, GSM8K | stable |
 | `download_dataset.py` | OpenAssistant + GSM8K → JSONL | stable |
 | `rl/environment.py` | Gymnasium `ChatEnvironment` | stable |
 | `rl/reward_model.py` | `SimpleRating`, `MultiCriteria`, `Learned` | stable |
