@@ -12,7 +12,7 @@ nanoGPT is a training and sampling toolkit. This project takes the model and bui
 | Fine-tuning | Chat-aware pipeline, timestamped checkpoints, auto-reload |
 | Data | Bootstrap from OpenAssistant + GSM8K |
 | RL | Gymnasium environment, three reward models, PPO with KL regularisation |
-| Tests | 82 (nanoGPT has zero) |
+| Tests | 126 across 7 files (nanoGPT has zero) |
 | Security | Localhost-only, CORS, rate limiting, input validation, `weights_only=True` on all `torch.load()` |
 | Code protection | `ast-grep` rules on model config, device logic, checkpoints, public API |
 
@@ -21,12 +21,12 @@ See [docs/changes-from-nanogpt.md](docs/changes-from-nanogpt.md).
 ## Quick Start
 
 ```bash
-source venv/bin/activate
+source .venv/bin/activate
 pip install -r requirements.txt
 python app.py
 ```
 
-The server runs at `http://127.0.0.1:5000`. It loads the most recent `models/finetuned_*.pt`, falling back to `models/gpt2_nano.pt` if none exists.
+The server runs at `http://126.0.0.1:5000`. It loads the most recent `models/finetuned_*.pt`, falling back to `models/gpt2_nano.pt` if none exists.
 
 ## The Loop
 
@@ -52,10 +52,11 @@ Agent instructions live in [agents.md](agents.md).
 |------|-------------|
 | `app.py` | Flask server: inference, logging, ratings |
 | `finetune.py` | Supervised fine-tuning |
+| `eval.py` | Evaluation pipeline: perplexity, generation quality, GSM8K |
 | `download_dataset.py` | Dataset bootstrapper |
 | `model.py` | GPT-2 model (vendored from nanoGPT) |
 | `rl/` | Gymnasium env, reward models, PPO trainer |
-| `tests/` | 82 tests |
+| `tests/` | 126 tests across 7 files |
 | `templates/index.html` | Chat UI |
 
 ## Docs
