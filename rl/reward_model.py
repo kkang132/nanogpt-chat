@@ -52,7 +52,7 @@ class SimpleRatingReward(RewardModel):
     (thumbs up/down) to score responses.
     """
     
-    def __init__(self, default_reward: float = 0.5):
+    def __init__(self, default_reward: float = 0.5) -> None:
         """
         Initialize the simple rating reward model.
         
@@ -122,7 +122,7 @@ class MultiCriteriaReward(RewardModel):
     safety, and coherence, then combines them into a single reward score.
     """
     
-    def __init__(self, criteria_weights: Optional[Dict[str, float]] = None):
+    def __init__(self, criteria_weights: Optional[Dict[str, float]] = None) -> None:
         """
         Initialize multi-criteria reward model.
         
@@ -215,7 +215,7 @@ class LearnedRewardModel(RewardModel):
     learn to predict user satisfaction from conversation context.
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the learned reward model."""
         self.model = None  # Placeholder for actual ML model
         self.training_data = []

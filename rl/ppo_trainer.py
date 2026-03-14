@@ -11,18 +11,25 @@ throughput. For the algorithm details, see Schulman et al., 2017:
 https://arxiv.org/abs/1707.06347
 """
 
+from __future__ import annotations
+
 import copy
 import json
 import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+
+if TYPE_CHECKING:
+    import tiktoken
+
+    from rl.reward_model import RewardModel
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +110,14 @@ class PPOTrainer:
     distribution.
     """
 
-    def __init__(self, model, tokenizer, reward_model, config=None, device=None):
+    def __init__(
+        self,
+        model: nn.Module,
+        tokenizer: tiktoken.Encoding,
+        reward_model: RewardModel,
+        config: PPOConfig | None = None,
+        device: str | None = None,
+    ) -> None:
         """
         Args:
             model: a GPT instance (the policy to optimize).
@@ -153,7 +167,7 @@ class PPOTrainer:
     # Forward helpers
     # ------------------------------------------------------------------
 
-    def _forward_full(self, input_ids: torch.Tensor):
+    def _forward_full(self, input_ids: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Run the model and return full-sequence logits, hidden states, and values.
 

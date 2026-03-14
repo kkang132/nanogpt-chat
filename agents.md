@@ -27,7 +27,7 @@ Pre-commit enforces this. Bypass: `git commit --no-verify`.
 
 ## Code Style
 
-PEP 8, idiomatic Python. Config in `pyproject.toml` under `[tool.ruff]`.
+PEP 8, idiomatic Python. Use type hints on all function signatures. Config in `pyproject.toml` under `[tool.ruff]`.
 Run `ruff check . && ruff format .` before committing. Pre-commit hooks enforce this.
 Do not suppress lint warnings without a justifying comment.
 

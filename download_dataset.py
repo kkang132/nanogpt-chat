@@ -96,7 +96,7 @@ def download_gsm8k(n: int) -> list[dict]:
     return examples
 
 
-def main():
+def main() -> None:
     print("=" * 60)
     print("Q&A Dataset Downloader")
     print("=" * 60)

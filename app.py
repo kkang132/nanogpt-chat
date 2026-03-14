@@ -1,4 +1,6 @@
-from flask import Flask, render_template, request, jsonify
+from __future__ import annotations
+
+from flask import Flask, Response, render_template, request, jsonify
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -11,16 +13,47 @@ from logging.handlers import RotatingFileHandler
 import logging
 from nanoGPT.model import GPT, GPTConfig
 
-app = Flask(__name__)
-CORS(app, origins=["http://127.0.0.1:5000", "http://localhost:5000"])
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
 
-# Configure rate limiting to prevent abuse
-# 20 requests per minute per IP for chat endpoint
-# 100 requests per minute for other endpoints
+# Server
+SERVER_HOST = "127.0.0.1"
+SERVER_PORT = 5000
+CORS_ORIGINS = [f"http://127.0.0.1:{SERVER_PORT}", f"http://localhost:{SERVER_PORT}"]
+
+# Rate limiting
+DEFAULT_RATE_LIMIT = "100 per minute"
+CHAT_RATE_LIMIT = "20 per minute"
+RATE_RATE_LIMIT = "30 per minute"
+
+# Generation defaults
+DEFAULT_MAX_TOKENS = 150
+DEFAULT_TEMPERATURE = 0.8
+DEFAULT_TOP_K = 200
+
+# Validation
+MAX_MESSAGE_LENGTH = 1000
+MIN_CHATS_FOR_FINETUNING = 10
+
+# GPT-2 base model config
+BASE_BLOCK_SIZE = 1024
+BASE_VOCAB_SIZE = 50257
+BASE_N_LAYER = 12
+BASE_N_HEAD = 12
+BASE_N_EMBD = 768
+BASE_DROPOUT = 0.0
+BASE_BIAS = True
+
+# ---------------------------------------------------------------------------
+
+app = Flask(__name__)
+CORS(app, origins=CORS_ORIGINS)
+
 limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=["100 per minute"],
+    default_limits=[DEFAULT_RATE_LIMIT],
     storage_uri="memory://"
 )
 
@@ -71,13 +104,13 @@ else:
     print("Loading base GPT-2 model...")
     nano_model_path = os.path.join(MODEL_DIR, 'gpt2_nano.pt')
     config = GPTConfig(
-        block_size=1024,
-        vocab_size=50257,
-        n_layer=12,
-        n_head=12,
-        n_embd=768,
-        dropout=0.0,
-        bias=True
+        block_size=BASE_BLOCK_SIZE,
+        vocab_size=BASE_VOCAB_SIZE,
+        n_layer=BASE_N_LAYER,
+        n_head=BASE_N_HEAD,
+        n_embd=BASE_N_EMBD,
+        dropout=BASE_DROPOUT,
+        bias=BASE_BIAS,
     )
     model = GPT(config)
     model.load_state_dict(torch.load(nano_model_path, map_location=device, weights_only=True))
@@ -90,7 +123,7 @@ print(f"Model loaded with {sum(p.numel() for p in model.parameters())/1e6:.2f}M 
 import tiktoken
 enc = tiktoken.get_encoding("gpt2")
 
-def save_chat(user_message, assistant_response):
+def save_chat(user_message: str, assistant_response: str) -> str:
     """Save chat interaction to JSONL file with rotation for future fine-tuning.
 
     Returns the chat entry ID so callers can reference it (e.g. for rating).
@@ -125,7 +158,12 @@ def save_chat(user_message, assistant_response):
 
     return chat_id
 
-def generate_response(prompt, max_tokens=150, temperature=0.8, top_k=200):
+def generate_response(
+    prompt: str,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+    temperature: float = DEFAULT_TEMPERATURE,
+    top_k: int = DEFAULT_TOP_K,
+) -> str:
     """Generate response using the model"""
     model.eval()
 
@@ -164,27 +202,27 @@ def generate_response(prompt, max_tokens=150, temperature=0.8, top_k=200):
     return response if response else "I'm thinking..."
 
 @app.after_request
-def set_security_headers(response):
+def set_security_headers(response: Response) -> Response:
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
-    response.headers['Content-Security-Policy'] = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+    response.headers['Content-Security-Policy'] = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'"
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     return response
 
 @app.errorhandler(Exception)
-def handle_exception(e):
+def handle_exception(e: Exception) -> tuple[Response, int]:
     """Catch-all error handler to prevent leaking internal details."""
     app.logger.error(f"Unhandled exception: {e}")
     return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/')
-def index():
+def index() -> str:
     """Render the chat UI (templates/index.html)."""
     return render_template('index.html')
 
 @app.route('/chat', methods=['POST'])
-@limiter.limit("20 per minute")
-def chat():
+@limiter.limit(CHAT_RATE_LIMIT)
+def chat() -> Response:
     """Chat endpoint. Expects JSON {"message": str}. Returns model response and chat count."""
     # Validate request content type
     if not request.is_json:
@@ -206,8 +244,8 @@ def chat():
         return jsonify({'error': 'Message must be a string'}), 400
 
     # Validate message length (prevent DoS and excessive token usage)
-    if len(user_message) > 1000:
-        return jsonify({'error': 'Message too long (max 1000 characters)'}), 400
+    if len(user_message) > MAX_MESSAGE_LENGTH:
+        return jsonify({'error': f'Message too long (max {MAX_MESSAGE_LENGTH} characters)'}), 400
 
     # Strip and validate non-empty after stripping
     user_message = user_message.strip()
@@ -216,7 +254,7 @@ def chat():
 
     # Generate response
     prompt = f"Human: {user_message}\nAssistant:"
-    response = generate_response(prompt, max_tokens=150, temperature=0.8)
+    response = generate_response(prompt, max_tokens=DEFAULT_MAX_TOKENS, temperature=DEFAULT_TEMPERATURE)
 
     # Save the interaction (non-critical — don't fail the response on write errors)
     chat_id = None
@@ -237,7 +275,7 @@ def chat():
     })
 
 @app.route('/stats', methods=['GET'])
-def stats():
+def stats() -> Response:
     """Get statistics about collected chat data"""
     if not os.path.exists(CHAT_LOG_FILE):
         return jsonify({'chat_count': 0})
@@ -246,12 +284,12 @@ def stats():
         chat_count = sum(1 for _ in f)
     return jsonify({
         'chat_count': chat_count,
-        'ready_for_finetuning': chat_count >= 10
+        'ready_for_finetuning': chat_count >= MIN_CHATS_FOR_FINETUNING
     })
 
 @app.route('/rate', methods=['POST'])
-@limiter.limit("30 per minute")
-def rate():
+@limiter.limit(RATE_RATE_LIMIT)
+def rate() -> Response:
     """Rate a chat response. Expects {"chat_id": str, "rating": 0 or 1}."""
     if not request.is_json:
         return jsonify({'error': 'Content-Type must be application/json'}), 400
@@ -299,10 +337,10 @@ if __name__ == '__main__':
     print(f"{'='*60}")
     print(f"Device: {device}")
     print(f"Chat logs: {CHAT_LOG_FILE}")
-    print(f"Access the app at: http://127.0.0.1:5000")
+    print(f"Access the app at: http://{SERVER_HOST}:{SERVER_PORT}")
     print(f"{'='*60}\n")
 
     # Security: disable debug mode and bind to localhost only in production
     # debug=True enables interactive debugger with arbitrary code execution
     # host='0.0.0.0' exposes the service to external networks
-    app.run(debug=False, host='127.0.0.1', port=5000)
+    app.run(debug=False, host=SERVER_HOST, port=SERVER_PORT)
