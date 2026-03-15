@@ -14,6 +14,7 @@ Usage:
 Each step calls the existing project scripts via subprocess so no logic
 is duplicated.  Run from the project root.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -95,7 +96,7 @@ def step_bootstrap(dry_run: bool) -> None:
     chat_log = PROJECT_ROOT / "chat_history.jsonl"
     if chat_log.exists() and not dry_run:
         count = sum(1 for _ in chat_log.open())
-        print(f"  chat_history.jsonl already exists ({count} entries), skipping download.")
+        print(f"  chat_history.jsonl already exists ({count} entries), skipping.")
         return
     run([PYTHON, "download_dataset.py"], dry_run=dry_run)
 
@@ -105,7 +106,13 @@ def step_finetune(dry_run: bool) -> None:
     run([PYTHON, "finetune.py"], dry_run=dry_run)
 
 
-def step_evaluate(checkpoint: str | None, *, dry_run: bool, full_eval: bool, label: str) -> None:
+def step_evaluate(
+    checkpoint: str | None,
+    *,
+    dry_run: bool,
+    full_eval: bool,
+    label: str,
+) -> None:
     banner_num = 3 if label == "baseline" else 6
     banner(banner_num, f"Evaluate ({label})")
     cmd = [PYTHON, "eval.py"]
@@ -187,7 +194,7 @@ def step_rl(dry_run: bool, rollout_steps: int) -> None:
 def step_compare_and_promote(dry_run: bool) -> None:
     banner(7, "Compare & promote")
     if dry_run:
-        print("  [dry-run] Compare last two eval results, promote winner to models/best.pt")
+        print("  [dry-run] Compare last two eval results, promote winner")
         return
 
     results = read_last_n_results(2)
@@ -199,7 +206,7 @@ def step_compare_and_promote(dry_run: bool) -> None:
     print(f"  Baseline:   {baseline['checkpoint']}")
     print(f"  Challenger: {challenger['checkpoint']}")
 
-    # Compare on val loss (lower is better) and generation quality (higher is better)
+    # Compare on val loss (lower is better) and generation quality (higher)
     b_loss = baseline.get("eval_val_loss")
     c_loss = challenger.get("eval_val_loss")
     b_gen = (baseline.get("generation") or {}).get("avg_combined_score")
@@ -211,18 +218,13 @@ def step_compare_and_promote(dry_run: bool) -> None:
     # Scoring: challenger wins if it improves on at least one metric
     # without regressing on the other.
     challenger_wins = False
-    if b_loss is not None and c_loss is not None and b_gen is not None and c_gen is not None:
+    if all(v is not None for v in (b_loss, c_loss, b_gen, c_gen)):
         loss_better = c_loss < b_loss
         gen_better = c_gen > b_gen
-        loss_same = abs(c_loss - b_loss) < 0.01
-        gen_same = abs(c_gen - b_gen) < 0.01
 
-        if (loss_better and not (c_gen < b_gen - 0.01)):
-            challenger_wins = True
-        elif (gen_better and not (c_loss > b_loss + 0.01)):
-            challenger_wins = True
-        elif loss_better and gen_better:
-            challenger_wins = True
+        challenger_wins = (loss_better and not (c_gen < b_gen - 0.01)) or (
+            gen_better and not (c_loss > b_loss + 0.01)
+        )
 
     if challenger_wins:
         winner = challenger["checkpoint"]
@@ -286,7 +288,12 @@ def main() -> None:
 
     # 3. Evaluate the new supervised checkpoint (baseline)
     baseline_ckpt = find_latest("finetuned_*.pt") if not args.dry_run else None
-    step_evaluate(baseline_ckpt, dry_run=args.dry_run, full_eval=args.full_eval, label="baseline")
+    step_evaluate(
+        baseline_ckpt,
+        dry_run=args.dry_run,
+        full_eval=args.full_eval,
+        label="baseline",
+    )
 
     # 4. Serve and collect synthetic data
     step_serve_and_collect(args.dry_run)
@@ -296,7 +303,12 @@ def main() -> None:
 
     # 6. Evaluate the RL checkpoint (challenger)
     challenger_ckpt = find_latest("ppo_*.pt") if not args.dry_run else None
-    step_evaluate(challenger_ckpt, dry_run=args.dry_run, full_eval=args.full_eval, label="challenger")
+    step_evaluate(
+        challenger_ckpt,
+        dry_run=args.dry_run,
+        full_eval=args.full_eval,
+        label="challenger",
+    )
 
     # 7. Compare and promote
     step_compare_and_promote(args.dry_run)
