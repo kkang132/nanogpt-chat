@@ -58,6 +58,8 @@ Do not run `gh auth login`, `gh auth switch`, or any command that changes the au
 
 Never use Bash subagents to read file contents — they can hallucinate output. Use the Read tool directly for any file where accuracy matters (especially `.git/config`, credentials, configuration). Reserve Bash for commands that *do* things, not commands that *read* things.
 
+**Claude-specific:** Claude Code spawns Bash subagents (via the Task tool) for shell commands. These subagents fabricate `git` and `gh` output — `git show`, `git log -p`, `git diff`, `head`, `cat` all return plausible but invented content, and each subagent invents *different* content for the same command. Always verify `git`/`gh` output with the Read tool or by running the command in the parent context. Never trust a subagent's report of `gh auth status`, `git push`, or `gh pr` results without independent confirmation.
+
 ## Context Recovery
 
 Read `docs/rl-roadmap.md`. Check `git log`. The supervised system is the fallback — it must always work.

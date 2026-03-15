@@ -66,12 +66,24 @@ Agent instructions live in [agents.md](agents.md).
 |------|-------------|
 | `app.py` | Flask server: inference, logging, ratings |
 | `finetune.py` | Supervised fine-tuning |
+| `rl_finetune.py` | RL fine-tuning (PPO) entrypoint |
 | `eval.py` | Evaluation pipeline: perplexity, generation quality, GSM8K |
 | `download_dataset.py` | Dataset bootstrapper |
 | `model.py` | GPT-2 model (vendored from nanoGPT) |
 | `rl/` | Gymnasium env, reward models, PPO trainer |
+| `examples/` | End-to-end example scripts |
 | `tests/` | 126 tests across 7 files |
 | `templates/index.html` | Chat UI |
+
+## Examples
+
+`examples/full_loop.py` runs the complete improvement cycle in one shot: bootstrap, fine-tune, evaluate, serve (with synthetic chats), RL, evaluate again, and promote the winning checkpoint.
+
+```bash
+python examples/full_loop.py --dry-run   # see what it does
+python examples/full_loop.py             # run the full loop
+python examples/full_loop.py --full-eval # include GSM8K (slow)
+```
 
 ## Docs
 
