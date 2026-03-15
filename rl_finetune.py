@@ -11,6 +11,7 @@ Usage:
     python rl_finetune.py --rollout-steps 50       # fewer rollout steps
     python rl_finetune.py --reward-type multi_criteria
 """
+
 from __future__ import annotations
 
 import argparse
@@ -74,7 +75,7 @@ def find_latest_checkpoint() -> str | None:
 
 def load_checkpoint(path: str) -> GPT:
     """Load a checkpoint and return the model ready for RL training."""
-    torch.serialization.add_safe_globals([GPTConfig])
+    torch.serialization.add_safe_globals([GPTConfig, PPOConfig])
     raw = torch.load(path, map_location=device, weights_only=True)
 
     if isinstance(raw, dict) and "model_state_dict" in raw:
