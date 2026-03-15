@@ -124,7 +124,9 @@ def load_checkpoint(path: str) -> tuple[GPT, dict[str, object]]:
       ``iter``, ``train_loss``, ``val_loss``.
     - Base model (``gpt2_nano.pt``): a raw ``state_dict`` with no wrapper.
     """
-    torch.serialization.add_safe_globals([GPTConfig])
+    from rl.ppo_trainer import PPOConfig
+
+    torch.serialization.add_safe_globals([GPTConfig, PPOConfig])
     raw = torch.load(path, map_location=device, weights_only=True)
 
     if isinstance(raw, dict) and "model_state_dict" in raw:
