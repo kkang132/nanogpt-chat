@@ -32,21 +32,25 @@ The server runs at `http://127.0.0.1:5000`. It loads the most recent `models/fin
 
 The system improves through use:
 
-1. **Bootstrap** — `python3 download_dataset.py` seeds `chat_history.jsonl` from OpenAssistant and GSM8K.
-2. **Serve** — `python3 app.py` runs the chat server. Conversations and ratings are appended to the log.
-3. **Fine-tune** — `python3 finetune.py` trains on the rated conversations and writes a new checkpoint.
-4. **Evaluate** — `python3 eval.py` scores all checkpoints on perplexity, generation quality, and GSM8K accuracy.
-5. **Restart** — the server auto-loads the latest checkpoint.
+1. **Bootstrap** — downloads seed data (skips if `chat_history.jsonl` exists)
+2. **Fine-tune** — supervised training with early stopping → `models/finetuned_*.pt`
+3. **Evaluate baseline** — scores the supervised checkpoint (val loss + generation quality)
+4. **Serve & collect** — starts the chat server, sends synthetic prompts, stops the server
+5. **RL fine-tune** — PPO training → `models/ppo_*.pt`
+6. **Evaluate challenger** — scores the PPO checkpoint
+7. **Compare & promote** — if the challenger improves on at least one metric without regressing on the other, it is copied to `models/best.pt`
+
+`examples/full_loop.py` runs this complete cycle in one shot:
 
 ```bash
-python3 download_dataset.py   # once, to bootstrap
-python3 app.py                # serve and collect conversations
-python3 finetune.py           # train on collected data
-python3 eval.py               # score checkpoints
-# restart app.py to load the new checkpoint
-```
+source .venv/bin/activate
+pip install -r requirements.txt
 
-This is the supervised path. The RL path (`rl/ppo_trainer.py`) produces format-compatible checkpoints through PPO with a value head, KL-regularised against a frozen reference.
+python examples/full_loop.py --dry-run   # see what it does without executing
+python examples/full_loop.py             # run the full loop (~3 min on MPS)
+python examples/full_loop.py --full-eval # include GSM8K evaluation (slower)
+python examples/full_loop.py --rl-steps 10  # fewer PPO steps for a quick test
+```
 
 ## Fine-Tuning
 
@@ -56,7 +60,7 @@ The dataset schema is shared between bootstrap and live data.
 
 ## Agent-First Development
 
-This project is developed in JetBrains Air (ADE). Multiple heterogeneous agents work in parallel, each in its own worktree. The project has a settled part (the chat server, supervised fine-tuning) and an exploratory part (the RL extension). The agents are arranged so that work on one does not disturb the other.
+This project is developed in JetBrains Air (ADE) using multiple heterogeneous agents: Claude, Codex, Gemini, and Junie. They work in parallel, each in its own worktree. The project has a settled part (the chat server, supervised fine-tuning) and an exploratory part (the RL extension). The agents are arranged so that work on one does not disturb the other.
 
 Agent instructions live in [agents.md](agents.md).
 
@@ -74,16 +78,6 @@ Agent instructions live in [agents.md](agents.md).
 | `examples/` | End-to-end example scripts |
 | `tests/` | 126 tests across 7 files |
 | `templates/index.html` | Chat UI |
-
-## Examples
-
-`examples/full_loop.py` runs the complete improvement cycle in one shot: bootstrap, fine-tune, evaluate, serve (with synthetic chats), RL, evaluate again, and promote the winning checkpoint.
-
-```bash
-python examples/full_loop.py --dry-run   # see what it does
-python examples/full_loop.py             # run the full loop
-python examples/full_loop.py --full-eval # include GSM8K (slow)
-```
 
 ## Docs
 
