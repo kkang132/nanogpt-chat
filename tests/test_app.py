@@ -12,13 +12,8 @@ from unittest.mock import patch, MagicMock, mock_open
 import torch
 import numpy as np
 
-# Mock the model loading before importing app
-with patch.dict('sys.modules', {
-    'nanoGPT.model': MagicMock(),
-    'tiktoken': MagicMock()
-}):
-    import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Module-level stubs (`sys.modules['nanoGPT.model']`, fake `torch.load`) and
+# the initial `import app` happen in `tests/conftest.py`.
 
 
 class TestApp(unittest.TestCase):
@@ -39,30 +34,20 @@ class TestApp(unittest.TestCase):
         """Clean up after tests."""
         shutil.rmtree(self.test_dir, ignore_errors=True)
 
-    @patch('app.CHAT_LOG_FILE')
-    @patch('app.MODEL_DIR')
-    @patch('app.os.path.exists')
-    @patch('app.torch.load')
-    @patch('app.GPT')
-    def test_save_chat(self, mock_gpt, mock_torch_load, mock_exists, mock_model_dir, mock_chat_log):
-        """Test saving chat interactions to JSONL file."""
-        mock_chat_log = self.test_chat_log
-        
-        # Mock file operations
-        with patch('builtins.open', mock_open()) as mock_file:
+    def test_save_chat(self):
+        """save_chat appends a JSONL entry with user, assistant, timestamp."""
+        test_file = os.path.join(self.test_dir, 'chat_history.jsonl')
+
+        with patch('app.CHAT_LOG_FILE', test_file):
             from app import save_chat
-            
             save_chat("Hello", "Hi there!")
-            
-            # Verify file was opened in append mode
-            mock_file.assert_called_once_with(mock_chat_log, 'a')
-            
-            # Verify JSON was written
-            call_args = mock_file().write.call_args[0][0]
-            data = json.loads(call_args.strip())
-            self.assertEqual(data['user'], "Hello")
-            self.assertEqual(data['assistant'], "Hi there!")
-            self.assertIn('timestamp', data)
+
+        self.assertTrue(os.path.exists(test_file))
+        with open(test_file) as f:
+            data = json.loads(f.readline())
+        self.assertEqual(data['user'], "Hello")
+        self.assertEqual(data['assistant'], "Hi there!")
+        self.assertIn('timestamp', data)
 
     def test_save_chat_creates_valid_jsonl(self):
         """Test that save_chat creates valid JSONL entries."""
@@ -112,45 +97,49 @@ class TestApp(unittest.TestCase):
     def test_generate_response_stops_at_newline(self, mock_enc, mock_model):
         """Test that generation stops at newline token."""
         mock_model.config.block_size = 1024
-        
+        mock_model.return_value = (torch.zeros(1, 3, 50257), None)
+
         # Mock encoding
-        mock_enc.encode.side_effect = lambda x: [1, 2, 3] if 'Human' in x else [10]  # 10 = newline
+        mock_enc.encode.side_effect = lambda x, **_: [1, 2, 3] if 'Human' in x else [10]  # 10 = newline
         mock_enc.decode.return_value = "Human: Test\nAssistant: Response\n"
-        
+
         # Mock first token is newline, should stop immediately
         newline_token = torch.tensor([[10]])
-        
+
         with patch('app.torch.multinomial') as mock_multinomial:
             mock_multinomial.return_value = newline_token
-            
+
             from app import generate_response
-            result = generate_response("Human: Test\nAssistant:", max_tokens=100)
-            
-            # Should have stopped early due to newline
-            mock_multinomial.assert_called()
+            generate_response("Human: Test\nAssistant:", max_tokens=100)
+
+            # Should have stopped early due to newline (single multinomial call)
+            mock_multinomial.assert_called_once()
 
     @patch('app.model')
     @patch('app.enc')
     def test_generate_response_respects_block_size(self, mock_enc, mock_model):
         """Test that generation respects model block_size limit."""
         mock_model.config.block_size = 128
-        
+        mock_model.return_value = (torch.zeros(1, 128, 50257), None)
+
         # Create tokens that exceed block size
         long_prompt_tokens = list(range(150))  # Exceeds block_size
-        
+
         mock_enc.encode.return_value = long_prompt_tokens
         mock_enc.decode.return_value = "Human: " + "word " * 150 + "\nAssistant: Response"
-        
+
         with patch('app.torch.multinomial') as mock_multinomial:
             mock_multinomial.return_value = torch.tensor([[10]])  # Newline
-            
+
             from app import generate_response
-            
+
             # Should crop to block_size
-            result = generate_response("Human: " + "word " * 150 + "\nAssistant:", max_tokens=10)
-            
-            # Verify the model was called with cropped tokens
+            generate_response("Human: " + "word " * 150 + "\nAssistant:", max_tokens=10)
+
+            # Verify the model was called with tokens cropped to block_size
             mock_model.assert_called()
+            (idx_cond,), _ = mock_model.call_args
+            self.assertLessEqual(idx_cond.size(1), mock_model.config.block_size)
 
     @patch('app.Flask')
     @patch('app.model')
