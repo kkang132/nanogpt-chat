@@ -69,14 +69,14 @@ class TestPrepareTrainingData(unittest.TestCase):
         self.assertTrue(os.path.exists(train_file))
         self.assertTrue(os.path.exists(val_file))
         
-    @patch('finetune.CHAT_LOG_FILE')
-    def test_prepare_training_data_no_file(self, mock_chat_log):
+    def test_prepare_training_data_no_file(self):
         """Test prepare_training_data when chat file doesn't exist."""
-        mock_chat_log = os.path.join(self.test_dir, 'nonexistent.jsonl')
-        
-        from finetune import prepare_training_data
-        
-        result = prepare_training_data()
+        nonexistent = os.path.join(self.test_dir, 'nonexistent.jsonl')
+
+        with patch('finetune.CHAT_LOG_FILE', nonexistent):
+            from finetune import prepare_training_data
+            result = prepare_training_data()
+
         self.assertIsNone(result)
     
     @patch('finetune.CHAT_LOG_FILE')
@@ -142,10 +142,10 @@ class TestGetBatch(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        # Create sample data
+        # Create sample data large enough that block_size + 1 (= 129) tokens fit.
         self.train_data = np.array(list(range(1000)), dtype=np.uint16)
-        self.val_data = np.array(list(range(100, 200)), dtype=np.uint16)
-        
+        self.val_data = np.array(list(range(100, 500)), dtype=np.uint16)
+
         # Set batch size and block size for testing
         import finetune
         self.original_batch_size = finetune.batch_size
@@ -198,16 +198,20 @@ class TestGetBatch(unittest.TestCase):
         
         self.assertIn('too small', str(context.exception).lower())
     
-    @patch('finetune.device', 'cuda')
+    @patch('finetune.device', 'meta')
     def test_get_batch_moves_to_device(self):
-        """Test that batches are moved to specified device."""
+        """Test that batches are moved to the configured device.
+
+        Uses torch's `meta` device (always available, no allocation) as a
+        stand-in for `cuda` so the test runs on CPU-only hosts.
+        """
         from finetune import get_batch
-        
+
         x, y = get_batch('train', self.train_data, self.val_data)
-        
-        # Should be on CUDA if device is cuda
-        # (This test requires actual CUDA setup or mocking torch.to())
+
         self.assertIsInstance(x, torch.Tensor)
+        self.assertEqual(x.device.type, 'meta')
+        self.assertEqual(y.device.type, 'meta')
 
 
 class TestLearningRateSchedule(unittest.TestCase):
@@ -262,13 +266,14 @@ class TestEstimateLoss(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
+        # Both splits need at least block_size + 1 = 129 tokens for get_batch.
         self.train_data = np.array(list(range(500)), dtype=np.uint16)
-        self.val_data = np.array(list(range(100)), dtype=np.uint16)
-        
+        self.val_data = np.array(list(range(500)), dtype=np.uint16)
+
         # Create a mock model
         self.mock_model = MagicMock()
         self.mock_model.config.block_size = 128
-        
+
         # Mock model to return consistent loss
         mock_logits = torch.zeros(2, 128, 50257)
         self.mock_model.return_value = (mock_logits, torch.tensor(2.5))
@@ -278,13 +283,14 @@ class TestEstimateLoss(unittest.TestCase):
     def test_estimate_loss_both_splits(self):
         """Test estimate_loss returns losses for both splits."""
         from finetune import estimate_loss
-        
+
         losses = estimate_loss(self.mock_model, self.train_data, self.val_data)
-        
+
         self.assertIn('train', losses)
         self.assertIn('val', losses)
-        self.assertIsInstance(losses['train'], float)
-        self.assertIsInstance(losses['val'], float)
+        # estimate_loss returns the mean over eval_iters as a 0-d torch tensor
+        self.assertIsInstance(losses['train'], torch.Tensor)
+        self.assertIsInstance(losses['val'], torch.Tensor)
     
     @patch('finetune.device', 'cpu')
     @patch('finetune.eval_iters', 3)
@@ -307,48 +313,65 @@ class TestFinetuneIntegration(unittest.TestCase):
     @patch('finetune.torch.load')
     @patch('finetune.GPT')
     @patch('finetune.torch.optim.AdamW')
-    def test_finetune_early_stopping(self, mock_optimizer, mock_gpt, mock_torch_load, mock_prepare):
+    @patch('finetune.torch.save')
+    @patch('finetune.np.memmap')
+    def test_finetune_early_stopping(
+        self,
+        mock_memmap,
+        mock_torch_save,
+        mock_optimizer,
+        mock_gpt,
+        mock_torch_load,
+        mock_prepare,
+    ):
         """Test that early stopping works correctly."""
-        # Mock prepare to return valid data
-        mock_prepare.return_value = (
-            'train.bin', 'val.bin', 1000, 100
-        )
-        
+        # Mock prepare to return valid data and avoid touching disk for memmap.
+        mock_prepare.return_value = ('train.bin', 'val.bin', 1000, 100)
+        mock_memmap.return_value = np.zeros(1000, dtype=np.uint16)
+
         # Mock model and optimizer
         mock_model = MagicMock()
         mock_model.config.block_size = 128
         mock_model.parameters.return_value = [torch.tensor([1.0])]
         mock_model.to.return_value = mock_model
+
+        # Make a forward pass return logits and a loss tensor that supports
+        # `.backward()`.
+        loss = torch.tensor(2.5, requires_grad=True)
+        mock_model.return_value = (torch.zeros(2, 128, 50257), loss)
         mock_gpt.return_value = mock_model
-        
+
         # Mock torch.load for checkpoint
         mock_torch_load.return_value = {'layer': torch.tensor([1.0])}
-        
+
         mock_opt = MagicMock()
         mock_optimizer.return_value = mock_opt
-        
+
         # Mock estimate_loss to trigger early stopping
         with patch('finetune.estimate_loss') as mock_estimate:
-            # First eval: good loss, then no improvement
             mock_estimate.side_effect = [
-                {'train': 2.0, 'val': 2.0},  # Initial good loss
-                {'train': 2.1, 'val': 2.1},  # No improvement 1
-                {'train': 2.1, 'val': 2.1},  # No improvement 2
-                {'train': 2.1, 'val': 2.1},  # No improvement 3
-                {'train': 2.1, 'val': 2.1},  # No improvement 4
-                {'train': 2.1, 'val': 2.1},  # No improvement 5 - should stop
+                {'train': torch.tensor(2.0), 'val': torch.tensor(2.0)},  # initial best
+                {'train': torch.tensor(2.1), 'val': torch.tensor(2.1)},  # no improvement 1
+                {'train': torch.tensor(2.1), 'val': torch.tensor(2.1)},  # no improvement 2
+                {'train': torch.tensor(2.1), 'val': torch.tensor(2.1)},  # no improvement 3
+                {'train': torch.tensor(2.1), 'val': torch.tensor(2.1)},  # no improvement 4
+                {'train': torch.tensor(2.1), 'val': torch.tensor(2.1)},  # no improvement 5 -> stop
             ]
-            
+
             with patch('finetune.get_batch') as mock_batch:
-                mock_batch.return_value = (torch.zeros(2, 128), torch.zeros(2, 128))
-                
-                with patch('finetune.max_iters', 1000):
-                    with patch('finetune.eval_interval', 50):
-                        with patch('finetune.patience', 5):
-                            from finetune import finetune
-                            
-                            # Should complete without error
-                            finetune()
+                mock_batch.return_value = (
+                    torch.zeros(2, 128, dtype=torch.long),
+                    torch.zeros(2, 128, dtype=torch.long),
+                )
+
+                with patch('finetune.max_iters', 1000), \
+                     patch('finetune.eval_interval', 50), \
+                     patch('finetune.patience', 5):
+                    from finetune import finetune
+                    finetune()  # should complete without error
+
+        # Early stopping should have triggered before max_iters.
+        self.assertGreaterEqual(mock_estimate.call_count, 6)
 
 
 if __name__ == '__main__':
