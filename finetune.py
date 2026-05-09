@@ -35,6 +35,27 @@ min_delta = 0.001  # Minimum change in val loss to count as improvement
 
 print(f"Using device: {device}")
 
+# Cosine learning rate schedule with linear warmup. Module-level so that
+# unit tests and other consumers can call `get_lr` without entering finetune().
+warmup_iters = 100
+lr_decay_iters = max_iters
+min_lr = learning_rate / 10  # Min LR is 10% of max
+
+def get_lr(it):
+    """Return the learning rate at iteration `it`.
+
+    Linear warmup for `warmup_iters` steps, then cosine decay to `min_lr`
+    over the remaining `lr_decay_iters - warmup_iters` steps. Past
+    `lr_decay_iters` the rate is clamped to `min_lr`.
+    """
+    if it < warmup_iters:
+        return learning_rate * it / warmup_iters
+    if it > lr_decay_iters:
+        return min_lr
+    decay_ratio = (it - warmup_iters) / (lr_decay_iters - warmup_iters)
+    coeff = 0.5 * (1.0 + np.cos(np.pi * decay_ratio))
+    return min_lr + coeff * (learning_rate - min_lr)
+
 def prepare_training_data():
     """Convert chat history to training format"""
     if not os.path.exists(CHAT_LOG_FILE):
@@ -149,22 +170,6 @@ def finetune():
 
     # Optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
-
-    # Cosine learning rate scheduler with warmup
-    warmup_iters = 100
-    lr_decay_iters = max_iters
-    min_lr = learning_rate / 10  # Min LR is 10% of max
-
-    def get_lr(it):
-        # Linear warmup for warmup_iters steps
-        if it < warmup_iters:
-            return learning_rate * it / warmup_iters
-        # Cosine decay down to min learning rate after warmup
-        if it > lr_decay_iters:
-            return min_lr
-        decay_ratio = (it - warmup_iters) / (lr_decay_iters - warmup_iters)
-        coeff = 0.5 * (1.0 + np.cos(np.pi * decay_ratio))  # coeff ranges 0..1
-        return min_lr + coeff * (learning_rate - min_lr)
 
     print(f"\nStarting fine-tuning...")
     print(f"Batch size: {batch_size}")
