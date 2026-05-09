@@ -72,8 +72,15 @@ def app(tmp_path, monkeypatch):
          patch("tiktoken.get_encoding", return_value=mock_enc), \
          patch("glob.glob", return_value=[]):               # no finetuned checkpoints
 
-        # Override _APP_DIR so paths resolve to tmp_path
-        monkeypatch.setattr("os.path.abspath", lambda p: str(tmp_path) if p == os.path.dirname("") else os.path.realpath(p))
+        # Override _APP_DIR so paths resolve to tmp_path. Capture the real
+        # `abspath` *before* patching: otherwise the lambda's else branch
+        # calls `os.path.realpath`, whose CPython implementation in turn
+        # calls `os.path.abspath`, recursing back into this lambda forever.
+        _real_abspath = os.path.abspath
+        monkeypatch.setattr(
+            "os.path.abspath",
+            lambda p: str(tmp_path) if p == os.path.dirname("") else _real_abspath(p),
+        )
 
         import app as app_module
 
