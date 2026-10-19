@@ -29,3 +29,6 @@ eval/
 
 # OS
 .DS_Store
+
+# Former submodule, kept locally only
+/nanoGPT/
